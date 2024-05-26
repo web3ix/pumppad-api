@@ -8,8 +8,8 @@ import {
     BuyEntity,
     SellEntity,
 } from '../entities';
-import { InitDB1716733900693 } from '../migrations/1716733900693-InitDB';
-import { SeedTestnetNetwork1716733947870 } from '../migrations/1716733947870-SeedTestnetNetwork';
+import { InitDB1716741346244 } from '../migrations/1716741346244-InitDB';
+import { SeedTestnetNetwork1716741375908 } from '../migrations/1716741375908-SeedTestnetNetwork';
 config();
 
 const configService = new ConfigService();
@@ -22,7 +22,7 @@ export const entities = [
     SellEntity,
 ];
 
-const migrations = [InitDB1716733900693, SeedTestnetNetwork1716733947870];
+const migrations = [InitDB1716741346244, SeedTestnetNetwork1716741375908];
 
 export const dbConfig = {
     host: configService.get('DB_HOST'),

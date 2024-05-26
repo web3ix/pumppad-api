@@ -1,4 +1,4 @@
-import { Column, Entity, OneToMany, Unique } from 'typeorm';
+import { Column, Entity, OneToMany } from 'typeorm';
 import { BaseEntity } from './base.entity';
 import { BuyEntity } from './buy.entity';
 import { SellEntity } from './sell.entity';
@@ -17,22 +17,22 @@ export class TokenEntity extends BaseEntity {
     @Column({ default: 18 })
     decimals: number;
 
-    @Column()
+    @Column({ nullable: true })
     description: string;
 
     @Column({ default: '' })
     reserveToken: string;
 
-    @Column()
+    @Column({ nullable: true })
     image: string;
 
-    @Column()
+    @Column({ nullable: true })
     twitterLink: string;
 
-    @Column()
+    @Column({ nullable: true })
     telegramLink: string;
 
-    @Column()
+    @Column({ nullable: true })
     website: string;
 
     @OneToMany(() => BuyEntity, (buy) => buy.token)

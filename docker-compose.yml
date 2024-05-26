@@ -41,7 +41,7 @@ services:
         environment:
             POSTGRES_USER: postgres
             POSTGRES_PASSWORD: postgres
-            POSTGRES_DB: otc_api_db
+            POSTGRES_DB: pump_api_db
         ports:
             - 5432:5432
         networks:

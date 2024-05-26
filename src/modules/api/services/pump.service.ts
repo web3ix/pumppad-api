@@ -16,13 +16,13 @@ export class PumpService {
         private readonly evmService: EvmService,
 
         @Inject(TokenRepository)
-        private readonly tokenRepo: TokenRepository,
+        private tokenRepo: TokenRepository,
 
         @Inject(BuyRepository)
-        private readonly buyRepo: BuyRepository,
+        private buyRepo: BuyRepository,
 
         @Inject(SellRepository)
-        private readonly sellRepo: SellRepository,
+        private sellRepo: SellRepository,
     ) {}
 
     async createToken(
@@ -55,7 +55,6 @@ export class PumpService {
         if (!tokenEntity) throw new Error('No Token');
 
         const buyEvent = new BuyEntity();
-        buyEvent.token = tokenEntity;
         buyEvent.user = user;
         buyEvent.receiver = receiver;
         buyEvent.amountMinted = amountMinted.toString();

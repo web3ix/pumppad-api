@@ -1,4 +1,4 @@
-import { CHAIN_ID, PUMP_TOPIC } from '@/blockchain/configs';
+import { PUMP_TOPIC } from '@/blockchain/configs';
 import { EvmService } from '@/blockchain/services';
 import { Process, Processor } from '@nestjs/bull';
 import { Inject } from '@nestjs/common';
@@ -17,23 +17,21 @@ export class ConsumerService {
     ) {}
 
     @Process('EVM_PUMP_TXN_LOGS')
-    async processOTCTxnLogsEvm(
-        job: Job<{ chainId: CHAIN_ID; logs: ethers.providers.Log[] }>,
-    ) {
-        const { chainId, logs } = job.data;
+    async processOTCTxnLogsEvm(job: Job<{ logs: ethers.providers.Log[] }>) {
+        const { logs } = job.data;
         const length = logs.length;
 
         for (let i = 0; i < length; i++) {
             const log = logs[i];
             switch (log.topics[0]) {
                 case PUMP_TOPIC.TOKEN_CREATED:
-                    await this.handleTokenCreatedEvm(chainId, log);
+                    await this.handleTokenCreatedEvm(log);
                     break;
                 case PUMP_TOPIC.BUY:
-                    await this.handleBuyEvm(chainId, log);
+                    await this.handleBuyEvm(log);
                     break;
                 case PUMP_TOPIC.SELL:
-                    await this.handleSellEvm(chainId, log);
+                    await this.handleSellEvm(log);
                     break;
                 default:
                     break;
@@ -41,10 +39,7 @@ export class ConsumerService {
         }
     }
 
-    private async handleTokenCreatedEvm(
-        chainId: CHAIN_ID,
-        log: ethers.providers.Log,
-    ) {
+    private async handleTokenCreatedEvm(log: ethers.providers.Log) {
         try {
             const event = await this.pumpService.decodeEventEvm<{
                 token: string;
@@ -52,8 +47,6 @@ export class ConsumerService {
                 symbol: string;
                 reserveToken: string;
             }>('TokenCreated', log);
-
-            console.log(event.name);
 
             return this.pumpService.createToken(
                 event.token,
@@ -69,7 +62,7 @@ export class ConsumerService {
         }
     }
 
-    private async handleBuyEvm(chainId: CHAIN_ID, log: ethers.providers.Log) {
+    private async handleBuyEvm(log: ethers.providers.Log) {
         try {
             const event = await this.pumpService.decodeEventEvm<{
                 token: string;
@@ -96,7 +89,7 @@ export class ConsumerService {
         }
     }
 
-    private async handleSellEvm(chainId: CHAIN_ID, log: ethers.providers.Log) {
+    private async handleSellEvm(log: ethers.providers.Log) {
         try {
             const event = await this.pumpService.decodeEventEvm<{
                 token: string;

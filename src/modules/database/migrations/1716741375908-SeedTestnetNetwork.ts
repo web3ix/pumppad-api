@@ -3,7 +3,7 @@ import { NetworkConfigEntity, NetworkEntity } from '../entities';
 import { CHAINS, CHAIN_ID, CONTRACTS } from '../../blockchain/configs';
 import { CONFIG_KEYS } from '../../../shared/constants';
 
-export class SeedTestnetNetwork1716733947870 implements MigrationInterface {
+export class SeedTestnetNetwork1716741375908 implements MigrationInterface {
     public async up(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.manager.save(NetworkEntity, {
             name: CHAINS[CHAIN_ID.SEPOLIA].name,
