@@ -18,6 +18,7 @@ import { ethers } from 'ethers';
 import * as anchor from '@project-serum/anchor';
 import { BorshCoder, EventParser } from '@project-serum/anchor';
 import { Connection, PublicKey } from '@solana/web3.js';
+import { PROGRAM_ID } from './sdk/constants';
 
 @Injectable()
 export class ScheduleService {
@@ -79,11 +80,13 @@ export class ScheduleService {
         );
 
         const currentFromSignature = config.data.startSignature;
-        const pubKey = new PublicKey(CONTRACTS[chainId].PUMP.address);
-        let transactionList = await connection.getSignaturesForAddress(pubKey, {
-            limit: 1000,
-            until: currentFromSignature,
-        });
+        let transactionList = await connection.getSignaturesForAddress(
+            PROGRAM_ID,
+            {
+                limit: 1000,
+                until: currentFromSignature,
+            },
+        );
         if (!transactionList.length) {
             return this.networkConfigRepo.update(
                 { key: CONFIG_KEYS(chainId).GET_PUMP_TXN_LOGS },

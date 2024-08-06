@@ -4,7 +4,6 @@ import { CHAINS, CHAIN_ID, CONTRACTS } from '../../blockchain/configs';
 import { CONFIG_KEYS } from '../../../shared/constants';
 
 export class SeedDB1722937553644 implements MigrationInterface {
-
     public async up(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.manager.save(NetworkEntity, {
             name: CHAINS[CHAIN_ID.SOLANA_DEVNET].name,
@@ -17,15 +16,11 @@ export class SeedDB1722937553644 implements MigrationInterface {
                 isRunning: false,
                 runAt: Date.now(),
                 stop: false,
-                startBlock:
-                    CONTRACTS[CHAIN_ID.SOLANA_DEVNET].PUMP.deployedBlock,
                 startSignature:
                     CONTRACTS[CHAIN_ID.SOLANA_DEVNET].PUMP.deployedSignature,
             },
         });
     }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-    }
-
+    public async down(queryRunner: QueryRunner): Promise<void> {}
 }
