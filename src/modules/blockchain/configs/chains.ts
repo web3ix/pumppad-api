@@ -1,8 +1,8 @@
 import sample from 'lodash/sample';
 
 export enum CHAIN_ID {
-    ETHEREUM = 1,
-    SEPOLIA = 11155111,
+    SOLANA_MAINNET = 99999990,
+    SOLANA_DEVNET = 99999999,
 }
 
 export const CHAINS: Record<
@@ -11,25 +11,23 @@ export const CHAINS: Record<
         isMainnet: boolean;
         name: string;
         rpcUrls: string[];
-        explorerUrl: string;
     }
 > = {
-    [CHAIN_ID.ETHEREUM]: {
+    [CHAIN_ID.SOLANA_MAINNET]: {
         isMainnet: true,
-        name: 'Ethereum Mainnet',
+        name: 'Solana Mainnet',
         rpcUrls: [
-            'https://eth.llamarpc.com',
-            'https://eth-mainnet.public.blastapi.io',
-            'https://eth-pokt.nodies.app',
-            'https://rpc.ankr.com/eth',
+            'https://api.mainnet-beta.solana.com',
+            'https://mainnet.helius-rpc.com/?api-key=34cc68f2-d9f1-4e98-b53d-a2eb38105377',
         ],
-        explorerUrl: 'https://etherscan.io',
     },
-    [CHAIN_ID.SEPOLIA]: {
+    [CHAIN_ID.SOLANA_DEVNET]: {
         isMainnet: false,
-        name: 'Sepolia',
-        rpcUrls: ['https://ethereum-sepolia-rpc.publicnode.com'],
-        explorerUrl: 'https://sepolia.etherscan.io',
+        name: 'Solana Devnet',
+        rpcUrls: [
+            'https://api.devnet.solana.com',
+            'https://devnet.helius-rpc.com/?api-key=34cc68f2-d9f1-4e98-b53d-a2eb38105377',
+        ],
     },
 };
 

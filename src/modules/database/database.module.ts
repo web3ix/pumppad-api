@@ -3,10 +3,9 @@ import { configDb } from './configs';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import {
-    BuyRepository,
     NetworkConfigRepository,
     NetworkRepository,
-    SellRepository,
+    TradeRepository,
     TokenRepository,
 } from './repositories';
 
@@ -16,8 +15,7 @@ const repositories = [
     NetworkConfigRepository,
     NetworkRepository,
     TokenRepository,
-    BuyRepository,
-    SellRepository,
+    TradeRepository,
 ];
 
 const services = [];

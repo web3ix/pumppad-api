@@ -14,6 +14,6 @@ WORKDIR /home/node/app
 COPY --chown=node:node package*.json ./
 RUN npm install --production
 USER node
-EXPOSE 5000
+EXPOSE 8000
 COPY --from=builder --chown=node:node /app/dist  .
 CMD ["npm", "run", "start:prod"]

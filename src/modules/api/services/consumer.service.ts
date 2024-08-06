@@ -1,118 +1,101 @@
-import { PUMP_TOPIC } from '@/blockchain/configs';
+import { CHAINS, CHAIN_ID, PUMP_TOPIC, randomRPC } from '@/blockchain/configs';
 import { EvmService } from '@/blockchain/services';
 import { Process, Processor } from '@nestjs/bull';
 import { Inject } from '@nestjs/common';
 import { Job } from 'bull';
 import { BigNumber, ethers } from 'ethers';
-import { PumpService } from './pump.service';
+import { BondService } from './bond.service';
+import * as anchor from '@project-serum/anchor';
+import { BorshCoder, EventParser } from '@project-serum/anchor';
+import { IDL as otcIDL } from '@/shared/blockchain/idl';
+import CurveSdk from './sdk/Curve';
+import { Connection } from '@solana/web3.js';
 
 @Processor('QUEUE')
 export class ConsumerService {
     constructor(
-        @Inject(PumpService)
-        private readonly pumpService: PumpService,
+        @Inject(BondService)
+        private readonly bondService: BondService,
 
         @Inject(EvmService)
         private readonly evmService: EvmService,
     ) {}
 
-    @Process('EVM_PUMP_TXN_LOGS')
-    async processOTCTxnLogsEvm(job: Job<{ logs: ethers.providers.Log[] }>) {
-        const { logs } = job.data;
-        const length = logs.length;
+    @Process('SOLANA_PUMP_TXN_LOGS')
+    async processOTCTxnLogsEvm(
+        job: Job<{ chainId: CHAIN_ID; signatures: string[] }>,
+    ) {
+        const { signatures, chainId } = job.data;
 
-        for (let i = 0; i < length; i++) {
-            const log = logs[i];
-            switch (log.topics[0]) {
-                case PUMP_TOPIC.TOKEN_CREATED:
-                    await this.handleTokenCreatedEvm(log);
-                    break;
-                case PUMP_TOPIC.BUY:
-                    await this.handleBuyEvm(log);
-                    break;
-                case PUMP_TOPIC.SELL:
-                    await this.handleSellEvm(log);
-                    break;
-                default:
-                    break;
+        const connection = new Connection(randomRPC(CHAINS[chainId].rpcUrls), {
+            commitment: 'confirmed',
+        });
+        const sdk = new CurveSdk(connection);
+
+        let _signatures = signatures.reverse();
+        for await (const sig of _signatures) {
+            try {
+                const tx = await sdk.connection.getParsedTransaction(sig, {
+                    commitment: 'confirmed',
+                });
+
+                const eventParser = new EventParser(
+                    sdk.program.programId,
+                    new BorshCoder(sdk.program.idl),
+                );
+                const events = eventParser.parseLogs(tx.meta.logMessages);
+                for await (const event of events) {
+                    switch (event.name) {
+                        case 'NewTokenEvent':
+                            await this.bondService.createToken(
+                                event.data.token.toString(),
+                                event.data.creator.toString(),
+                                event.data.name.toString(),
+                                event.data.symbol.toString(),
+                                event.data.uri.toString(),
+                                tx.blockTime,
+                            );
+                            break;
+
+                        case 'ActivateTokenEvent':
+                            await this.bondService.activateToken(
+                                event.data.token.toString(),
+                                +event.data.stepId.toString(),
+                            );
+                            break;
+
+                        case 'BuyEvent':
+                            await this.bondService.createBuyEvent(
+                                sig,
+                                event.data.token.toString(),
+                                event.data.buyer.toString(),
+                                event.data.amount.toString(),
+                                event.data.reserve.toString(),
+                                tx.blockTime,
+                            );
+                            break;
+
+                        case 'SellEvent':
+                            await this.bondService.createBuyEvent(
+                                sig,
+                                event.data.token.toString(),
+                                event.data.seller.toString(),
+                                event.data.amount.toString(),
+                                event.data.reserve.toString(),
+                                tx.blockTime,
+                            );
+                            break;
+
+                        default:
+                            break;
+                    }
+                }
+            } catch (error) {
+                console.log(
+                    '🚀 ~ file: consumer.service.ts:75 ~ ConsumerService ~ forawait ~ error:',
+                    error,
+                );
             }
-        }
-    }
-
-    private async handleTokenCreatedEvm(log: ethers.providers.Log) {
-        try {
-            const event = await this.pumpService.decodeEventEvm<{
-                token: string;
-                name: string;
-                symbol: string;
-                reserveToken: string;
-            }>('TokenCreated', log);
-
-            return this.pumpService.createToken(
-                event.token,
-                event.name,
-                event.symbol,
-                event.reserveToken,
-            );
-        } catch (error) {
-            console.log(
-                '🚀 ~ file: consumer.service.ts:75 ~ ConsumerService ~ error:',
-                error,
-            );
-        }
-    }
-
-    private async handleBuyEvm(log: ethers.providers.Log) {
-        try {
-            const event = await this.pumpService.decodeEventEvm<{
-                token: string;
-                user: string;
-                receiver: string;
-                amountMinted: BigNumber;
-                reserveToken: string;
-                reserveAmount: BigNumber;
-            }>('Buy', log);
-
-            return this.pumpService.createBuyEvent(
-                event.token,
-                event.user,
-                event.receiver,
-                event.amountMinted,
-                event.reserveToken,
-                event.reserveAmount,
-            );
-        } catch (error) {
-            console.log(
-                '🚀 ~ file: consumer.service.ts:75 ~ ConsumerService ~ error:',
-                error,
-            );
-        }
-    }
-
-    private async handleSellEvm(log: ethers.providers.Log) {
-        try {
-            const event = await this.pumpService.decodeEventEvm<{
-                token: string;
-                user: string;
-                receiver: string;
-                amountBurned: BigNumber;
-                reserveToken: string;
-                refundAmount: BigNumber;
-            }>('Sell', log);
-
-            return this.pumpService.createSellEvent(
-                event.token,
-                event.user,
-                event.receiver,
-                event.amountBurned,
-                event.reserveToken,
-                event.refundAmount,
-            );
-        } catch (error) {
-            console.log(
-                '🚀 ~ file: consumer.service.ts:75 ~ ConsumerService ~ error:',
-                error,
-            );
         }
     }
 }

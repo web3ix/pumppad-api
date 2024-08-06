@@ -24,6 +24,12 @@ export class TokenEntity extends BaseEntity {
     @Column({ default: '' })
     name: string;
 
+    @Column({ default: '' })
+    symbol: string;
+
+    @Column({ default: '' })
+    decimals: string;
+
     @Column()
     cmcId: number;
 }

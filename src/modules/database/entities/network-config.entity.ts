@@ -16,5 +16,7 @@ export class NetworkConfigEntity extends BaseEntity {
         stop?: boolean;
         startBlock?: number;
         endBlock?: number;
+        startSignature?: string;
+        endSignature?: string;
     };
 }

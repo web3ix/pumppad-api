@@ -5,17 +5,18 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import {
     AuthService,
     ConsumerService,
-    PumpService,
+    BondService,
     ScheduleService,
 } from '@/api/services';
 import { BullModule } from '@nestjs/bull';
 import { ScheduleModule } from '@nestjs/schedule';
 import { configQueue } from '@/database/configs';
 import { BlockchainModule } from '@/blockchain';
+import { BondController } from './controllers/bond.controller';
 
-const controllers = [AuthController];
+const controllers = [AuthController, BondController];
 
-const services = [AuthService, ScheduleService, ConsumerService, PumpService];
+const services = [AuthService, ScheduleService, ConsumerService, BondService];
 
 @Module({
     imports: [

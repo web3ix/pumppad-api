@@ -5,11 +5,13 @@ import {
     NetworkConfigEntity,
     NetworkEntity,
     TokenEntity,
-    BuyEntity,
-    SellEntity,
+    TradeEntity,
 } from '../entities';
-import { InitDB1716741346244 } from '../migrations/1716741346244-InitDB';
-import { SeedTestnetNetwork1716741375908 } from '../migrations/1716741375908-SeedTestnetNetwork';
+import { InitDB1722937546265 } from '../migrations/1722937546265-InitDB';
+import { SeedDB1722937553644 } from '../migrations/1722937553644-SeedDB';
+import { AddStep1722940061789 } from '../migrations/1722940061789-AddStep';
+import { AddSign1722940789718 } from '../migrations/1722940789718-AddSign';
+
 config();
 
 const configService = new ConfigService();
@@ -18,11 +20,15 @@ export const entities = [
     NetworkConfigEntity,
     NetworkEntity,
     TokenEntity,
-    BuyEntity,
-    SellEntity,
+    TradeEntity,
 ];
 
-const migrations = [InitDB1716741346244, SeedTestnetNetwork1716741375908];
+const migrations = [
+    InitDB1722937546265,
+    SeedDB1722937553644,
+    AddStep1722940061789,
+    AddSign1722940789718,
+];
 
 export const dbConfig = {
     host: configService.get('DB_HOST'),

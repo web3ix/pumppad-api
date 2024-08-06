@@ -15,6 +15,9 @@ import { Inject, Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Queue } from 'bull';
 import { ethers } from 'ethers';
+import * as anchor from '@project-serum/anchor';
+import { BorshCoder, EventParser } from '@project-serum/anchor';
+import { Connection, PublicKey } from '@solana/web3.js';
 
 @Injectable()
 export class ScheduleService {
@@ -35,8 +38,8 @@ export class ScheduleService {
     @Cron(CronExpression.EVERY_5_SECONDS)
     async getPumpTxnLogs() {
         this._runCron(
-            CHAIN_ID.SEPOLIA,
-            this._getPumpTxnLogsEvm(CHAIN_ID.SEPOLIA),
+            CHAIN_ID.SOLANA_DEVNET,
+            this._getPumpTxnLogsSolana(CHAIN_ID.SOLANA_DEVNET),
         );
     }
 
@@ -55,51 +58,53 @@ export class ScheduleService {
         }
     }
 
-    private async _getPumpTxnLogsEvm(chainId: CHAIN_ID) {
-        const provider = this.evmService.getProvider(
-            randomRPC(CHAINS[chainId].rpcUrls),
-        );
+    private async _getPumpTxnLogsSolana(chainId: CHAIN_ID) {
+        const connection = new Connection(randomRPC(CHAINS[chainId].rpcUrls), {
+            commitment: 'confirmed',
+        });
 
         const config = await this.networkConfigRepo.findOne({
             where: { key: CONFIG_KEYS(chainId).GET_PUMP_TXN_LOGS },
         });
 
         if (config.data?.isRunning) return;
-
-        let _toBlock = config.data.endBlock;
-        if (!_toBlock) {
-            _toBlock = (await provider.getBlock('latest')).number;
-        }
-        const PUMP = CONTRACTS[chainId].PUMP;
-        const currentFromBlock = +(
-            config.data.startBlock ??
-            PUMP.deployedBlock ??
-            1
-        );
-        if (currentFromBlock >= _toBlock) return;
-        const currentToBlock =
-            _toBlock > currentFromBlock + CHUNK_BLOCK_NUMBER[chainId]
-                ? currentFromBlock + CHUNK_BLOCK_NUMBER[chainId]
-                : _toBlock;
-
-        // get PUMP txn logs
-        const logs: ethers.providers.Log[] = await provider.send(
-            'eth_getLogs',
-            [
-                {
-                    address: PUMP.address,
-                    fromBlock: formattedHexString(currentFromBlock),
-                    toBlock: formattedHexString(currentToBlock),
-                    topics: [[...Object.values(PUMP_TOPIC)]],
+        await this.networkConfigRepo.update(
+            { key: CONFIG_KEYS(chainId).GET_PUMP_TXN_LOGS },
+            {
+                data: {
+                    ...config.data,
+                    isRunning: true,
                 },
-            ],
+            },
+        );
+
+        const currentFromSignature = config.data.startSignature;
+        const pubKey = new PublicKey(CONTRACTS[chainId].PUMP.address);
+        let transactionList = await connection.getSignaturesForAddress(pubKey, {
+            limit: 1000,
+            until: currentFromSignature,
+        });
+        if (!transactionList.length) {
+            return this.networkConfigRepo.update(
+                { key: CONFIG_KEYS(chainId).GET_PUMP_TXN_LOGS },
+                {
+                    data: {
+                        ...config.data,
+                        isRunning: false,
+                    },
+                },
+            );
+        }
+
+        let signatures = transactionList.map(
+            (transaction) => transaction.signature,
         );
 
         await this.queue.add(
-            'EVM_PUMP_TXN_LOGS',
+            'SOLANA_PUMP_TXN_LOGS',
             {
                 chainId,
-                logs: logs,
+                signatures: signatures,
             },
             {
                 removeOnComplete: 20,
@@ -109,8 +114,9 @@ export class ScheduleService {
             { key: CONFIG_KEYS(chainId).GET_PUMP_TXN_LOGS },
             {
                 data: {
+                    ...config.data,
                     isRunning: false,
-                    startBlock: currentToBlock,
+                    startSignature: signatures[0],
                 },
             },
         );

@@ -1,43 +1,36 @@
 import { Column, Entity, OneToMany } from 'typeorm';
 import { BaseEntity } from './base.entity';
-import { BuyEntity } from './buy.entity';
-import { SellEntity } from './sell.entity';
+import { TradeEntity } from './trade.entity';
 
 @Entity('token')
 export class TokenEntity extends BaseEntity {
-    @Column({ default: '' })
+    @Column()
     token: string;
 
-    @Column({ default: '' })
+    @Column()
+    creator: string;
+
+    @Column({ default: 0, nullable: true })
+    stepId: number;
+
+    @Column({ default: false })
+    activated: boolean;
+
+    @Column()
     name: string;
 
-    @Column({ default: '' })
+    @Column()
     symbol: string;
 
-    @Column({ default: 18 })
-    decimals: number;
+    @Column()
+    uri: string;
 
-    @Column({ nullable: true })
-    description: string;
+    @Column()
+    timestamp: number;
 
-    @Column({ default: '' })
-    reserveToken: string;
+    @Column({ type: 'decimal', nullable: true })
+    lastPrice: number;
 
-    @Column({ nullable: true })
-    image: string;
-
-    @Column({ nullable: true })
-    twitterLink: string;
-
-    @Column({ nullable: true })
-    telegramLink: string;
-
-    @Column({ nullable: true })
-    website: string;
-
-    @OneToMany(() => BuyEntity, (buy) => buy.token)
-    buys: BuyEntity[];
-
-    @OneToMany(() => SellEntity, (sell) => sell.token)
-    sells: SellEntity[];
+    @OneToMany(() => TradeEntity, (buy) => buy.token)
+    trades: TradeEntity[];
 }
