@@ -7,7 +7,7 @@ RUN npm run build
 
 FROM node:18.15.0 AS runner
 
-ENV PORT 5000
+ENV PORT 8000
 
 RUN mkdir -p /home/node/app/node_modules && chown -R node:node /home/node/app
 WORKDIR /home/node/app
