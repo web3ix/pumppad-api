@@ -60,34 +60,75 @@ export class ScheduleService {
     }
 
     private async _getPumpTxnLogsSolana(chainId: CHAIN_ID) {
-        const connection = new Connection(randomRPC(CHAINS[chainId].rpcUrls), {
-            commitment: 'confirmed',
-        });
-
         const config = await this.networkConfigRepo.findOne({
             where: { key: CONFIG_KEYS(chainId).GET_PUMP_TXN_LOGS },
         });
 
         if (config.data?.isRunning) return;
-        await this.networkConfigRepo.update(
-            { key: CONFIG_KEYS(chainId).GET_PUMP_TXN_LOGS },
-            {
-                data: {
-                    ...config.data,
-                    isRunning: true,
-                },
-            },
-        );
 
-        const currentFromSignature = config.data.startSignature;
-        let transactionList = await connection.getSignaturesForAddress(
-            PROGRAM_ID,
-            {
-                limit: 1000,
-                until: currentFromSignature,
-            },
-        );
-        if (!transactionList.length) {
+        try {
+            const connection = new Connection(
+                randomRPC(CHAINS[chainId].rpcUrls),
+                {
+                    commitment: 'confirmed',
+                },
+            );
+
+            await this.networkConfigRepo.update(
+                { key: CONFIG_KEYS(chainId).GET_PUMP_TXN_LOGS },
+                {
+                    data: {
+                        ...config.data,
+                        isRunning: true,
+                    },
+                },
+            );
+
+            const currentFromSignature = config.data.startSignature;
+            let transactionList = await connection.getSignaturesForAddress(
+                PROGRAM_ID,
+                {
+                    limit: 1000,
+                    until: currentFromSignature,
+                },
+            );
+            if (!transactionList.length) {
+                return this.networkConfigRepo.update(
+                    { key: CONFIG_KEYS(chainId).GET_PUMP_TXN_LOGS },
+                    {
+                        data: {
+                            ...config.data,
+                            isRunning: false,
+                        },
+                    },
+                );
+            }
+
+            let signatures = transactionList.map(
+                (transaction) => transaction.signature,
+            );
+
+            await this.queue.add(
+                'SOLANA_PUMP_TXN_LOGS',
+                {
+                    chainId,
+                    signatures: signatures,
+                },
+                {
+                    removeOnComplete: 20,
+                },
+            );
+            return this.networkConfigRepo.update(
+                { key: CONFIG_KEYS(chainId).GET_PUMP_TXN_LOGS },
+                {
+                    data: {
+                        ...config.data,
+                        isRunning: false,
+                        startSignature: signatures[0],
+                    },
+                },
+            );
+        } catch (error) {
             return this.networkConfigRepo.update(
                 { key: CONFIG_KEYS(chainId).GET_PUMP_TXN_LOGS },
                 {
@@ -98,30 +139,5 @@ export class ScheduleService {
                 },
             );
         }
-
-        let signatures = transactionList.map(
-            (transaction) => transaction.signature,
-        );
-
-        await this.queue.add(
-            'SOLANA_PUMP_TXN_LOGS',
-            {
-                chainId,
-                signatures: signatures,
-            },
-            {
-                removeOnComplete: 20,
-            },
-        );
-        return this.networkConfigRepo.update(
-            { key: CONFIG_KEYS(chainId).GET_PUMP_TXN_LOGS },
-            {
-                data: {
-                    ...config.data,
-                    isRunning: false,
-                    startSignature: signatures[0],
-                },
-            },
-        );
     }
 }
