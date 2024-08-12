@@ -1,24 +1,17 @@
-import { CHAINS, CHAIN_ID, PUMP_TOPIC, randomRPC } from '@/blockchain/configs';
-import { EvmService } from '@/blockchain/services';
+import { CHAINS, CHAIN_ID, randomRPC } from '@/blockchain/configs';
 import { Process, Processor } from '@nestjs/bull';
 import { Inject } from '@nestjs/common';
-import { Job } from 'bull';
-import { BigNumber, ethers } from 'ethers';
-import { BondService } from './bond.service';
-import * as anchor from '@project-serum/anchor';
 import { BorshCoder, EventParser } from '@project-serum/anchor';
-import { IDL as otcIDL } from '@/shared/blockchain/idl';
-import CurveSdk from './sdk/Curve';
 import { Connection } from '@solana/web3.js';
+import { Job } from 'bull';
+import { BondService } from './bond.service';
+import CurveSdk from './sdk/Curve';
 
 @Processor('QUEUE')
 export class ConsumerService {
     constructor(
         @Inject(BondService)
         private readonly bondService: BondService,
-
-        @Inject(EvmService)
-        private readonly evmService: EvmService,
     ) {}
 
     @Process('SOLANA_PUMP_TXN_LOGS')
@@ -76,7 +69,7 @@ export class ConsumerService {
                             break;
 
                         case 'SellEvent':
-                            await this.bondService.createBuyEvent(
+                            await this.bondService.createSellEvent(
                                 sig,
                                 event.data.token.toString(),
                                 event.data.seller.toString(),

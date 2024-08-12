@@ -5,6 +5,8 @@ import { PumpAbi } from '@/shared/blockchain/abis';
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { PublicKey } from '@solana/web3.js';
 import { BigNumber, ethers } from 'ethers';
+import { SocketService } from './socket.service';
+import { Between, LessThan } from 'typeorm';
 
 const PRECISION = BigNumber.from('1000000000000000000');
 
@@ -19,6 +21,8 @@ export class BondService {
 
         @Inject(TradeRepository)
         private tradeRepo: TradeRepository,
+
+        private readonly socketClient: SocketService,
     ) {}
 
     async createToken(
@@ -48,7 +52,14 @@ export class BondService {
     }
 
     async activateToken(token: string, stepId: number) {
-        return this.tokenRepo.update(
+        const _token = await this.tokenRepo.findOne({
+            where: {
+                token,
+                activated: false,
+            },
+        });
+
+        await this.tokenRepo.update(
             {
                 token,
                 activated: false,
@@ -57,6 +68,16 @@ export class BondService {
                 activated: true,
                 stepId: stepId,
             },
+        );
+
+        return this.socketClient.emitNewToken(
+            _token.id,
+            token,
+            _token.creator,
+            _token.name,
+            _token.symbol,
+            _token.uri,
+            _token.timestamp,
         );
     }
 
@@ -87,21 +108,38 @@ export class BondService {
         );
         buyEvent.timestamp = timestamp;
 
+        const lastPrice = +ethers.utils.formatUnits(
+            BigNumber.from(reserveAmount)
+                .mul(PRECISION)
+                .div(BigNumber.from(amount)),
+            18,
+        );
+
+        let trade: TradeEntity;
         await this.tradeRepo.manager.transaction(
             async (transactionalEntityManager) => {
-                await this.tradeRepo.save(buyEvent);
+                trade = await this.tradeRepo.save(buyEvent);
                 await this.tokenRepo.update(
                     { token },
                     {
-                        lastPrice: +ethers.utils.formatUnits(
-                            BigNumber.from(reserveAmount)
-                                .mul(PRECISION)
-                                .div(BigNumber.from(amount)),
-                            18,
-                        ),
+                        lastPrice,
                     },
                 );
             },
+        );
+
+        return this.socketClient.emitNewTrade(
+            trade.id,
+            buyEvent.signature,
+            token,
+            buyEvent.isBuy,
+            buyEvent.doer,
+            buyEvent.amount,
+            buyEvent.reserveAmount,
+            buyEvent.parseAmount,
+            buyEvent.parseReserveAmount,
+            buyEvent.timestamp,
+            lastPrice,
         );
     }
 
@@ -132,21 +170,37 @@ export class BondService {
         );
         sellEvent.timestamp = timestamp;
 
+        const lastPrice = +ethers.utils.formatUnits(
+            BigNumber.from(reserveAmount)
+                .mul(PRECISION)
+                .div(BigNumber.from(amount)),
+            18,
+        );
+        let trade: TradeEntity;
         await this.tradeRepo.manager.transaction(
             async (transactionalEntityManager) => {
-                await this.tradeRepo.save(sellEvent);
+                trade = await this.tradeRepo.save(sellEvent);
                 await this.tokenRepo.update(
                     { token },
                     {
-                        lastPrice: +ethers.utils.formatUnits(
-                            BigNumber.from(reserveAmount)
-                                .mul(PRECISION)
-                                .div(BigNumber.from(amount)),
-                            18,
-                        ),
+                        lastPrice,
                     },
                 );
             },
+        );
+
+        return this.socketClient.emitNewTrade(
+            trade.id,
+            sellEvent.signature,
+            token,
+            sellEvent.isBuy,
+            sellEvent.doer,
+            sellEvent.amount,
+            sellEvent.reserveAmount,
+            sellEvent.parseAmount,
+            sellEvent.parseReserveAmount,
+            sellEvent.timestamp,
+            lastPrice,
         );
     }
 
@@ -197,6 +251,11 @@ export class BondService {
                     'lastPrice',
                     'timestamp',
                 ],
+                order: {
+                    trades: {
+                        timestamp: 'DESC',
+                    },
+                },
             });
             if (!tokenEntity) throw new NotFoundException();
 
@@ -214,7 +273,7 @@ export class BondService {
                 },
             },
             order: {
-                updatedAt: 'DESC',
+                timestamp: 'DESC',
             },
             relations: {
                 token: true,
@@ -263,5 +322,88 @@ export class BondService {
             trades,
             kingOfHill,
         };
+    }
+
+    async getTokenOHCL(symbol: string, from: number, to: number) {
+        try {
+            const token = await this.tokenRepo.findOne({
+                where: { symbol },
+                relations: { trades: true },
+                order: {
+                    trades: {
+                        timestamp: 'ASC',
+                    },
+                },
+            });
+
+            if (
+                !token ||
+                !token.trades.length ||
+                to < token.trades[0].timestamp
+            )
+                return {
+                    s: 'no_data',
+                };
+
+            const result = await this.tradeRepo.query(
+                `
+                SELECT 
+
+                    FLOOR(EXTRACT(EPOCH FROM to_timestamp("timestamp")) / 300) * 300 AS time,
+                    MIN("parseReserveAmount" / "parseAmount") AS low, 
+                    MAX("parseReserveAmount" / "parseAmount") AS high,
+                    MIN(open) as open,
+                    MIN(close) as close,
+                    SUM("parseReserveAmount") as volume
+                FROM (
+                    select
+                        "timestamp", "parseReserveAmount", "parseAmount",
+                        FIRST_VALUE("parseReserveAmount" / "parseAmount") over (
+                        PARTITION BY FLOOR(EXTRACT(EPOCH FROM to_timestamp("timestamp")) / 300) * 300 ORDER BY "timestamp" ASC
+                        RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                    ) as open,
+                    FIRST_VALUE("parseReserveAmount" / "parseAmount") over (
+                        PARTITION BY FLOOR(EXTRACT(EPOCH FROM to_timestamp("timestamp")) / 300) * 300 ORDER BY "timestamp" DESC
+                        RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                    ) as close
+                    from "trade"
+                    WHERE ( "trade"."tokenId" = '${token.id}') 	
+                ) as tmp
+
+                GROUP BY time
+                ORDER BY time asc
+
+                `,
+            );
+
+            //   // Transform the result into TradingView's expected format
+            return {
+                s: 'ok',
+                t: result.map((row) => row.time),
+                o: result.map((row) => parseFloat(row.open).toFixed(8)),
+                h: result.map((row) => parseFloat(row.high).toFixed(8)),
+                l: result.map((row) => parseFloat(row.low).toFixed(8)),
+                c: result.map((row) => parseFloat(row.close).toFixed(8)),
+                v: result.map((row) => parseFloat(row.volume).toFixed(8)),
+            };
+
+            return {
+                s: 'ok',
+                t: [1723424400, 1723424700, 1723425000], // Ensure these timestamps cover the requested range
+                c: [102.5, 104.0, 102], // Closing prices for each interval
+                o: [100.0, 102.0, 104.0], // Opening prices for each interval
+                h: [105.0, 104.5, 108], // High prices for each interval
+                l: [99.0, 101.5, 98], // Low prices for each interval
+                v: [1500, 2000, 3000],
+            };
+        } catch (error) {
+            console.log(
+                '🚀 ~ file: bond.service.ts:391 ~ BondService ~ getTokenOHCL ~ error:',
+                error,
+            );
+            return {
+                s: 'no_data',
+            };
+        }
     }
 }

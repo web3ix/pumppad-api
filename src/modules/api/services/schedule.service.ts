@@ -64,23 +64,11 @@ export class ScheduleService {
             where: { key: CONFIG_KEYS(chainId).GET_PUMP_TXN_LOGS },
         });
 
-        if (config.data?.isRunning) return;
-
         try {
             const connection = new Connection(
                 randomRPC(CHAINS[chainId].rpcUrls),
                 {
                     commitment: 'confirmed',
-                },
-            );
-
-            await this.networkConfigRepo.update(
-                { key: CONFIG_KEYS(chainId).GET_PUMP_TXN_LOGS },
-                {
-                    data: {
-                        ...config.data,
-                        isRunning: true,
-                    },
                 },
             );
 
@@ -92,17 +80,7 @@ export class ScheduleService {
                     until: currentFromSignature,
                 },
             );
-            if (!transactionList.length) {
-                return this.networkConfigRepo.update(
-                    { key: CONFIG_KEYS(chainId).GET_PUMP_TXN_LOGS },
-                    {
-                        data: {
-                            ...config.data,
-                            isRunning: false,
-                        },
-                    },
-                );
-            }
+            if (!transactionList.length) return;
 
             let signatures = transactionList.map(
                 (transaction) => transaction.signature,
@@ -129,15 +107,7 @@ export class ScheduleService {
                 },
             );
         } catch (error) {
-            return this.networkConfigRepo.update(
-                { key: CONFIG_KEYS(chainId).GET_PUMP_TXN_LOGS },
-                {
-                    data: {
-                        ...config.data,
-                        isRunning: false,
-                    },
-                },
-            );
+            return;
         }
     }
 }
