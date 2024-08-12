@@ -2,7 +2,6 @@ import { BullRootModuleOptions } from '@nestjs/bull';
 import { registerAs } from '@nestjs/config';
 import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { dataSourceOptions } from './typeorm.config';
-import { RedisModuleOptions } from '@liaoliaots/nestjs-redis';
 // import fs from 'fs';
 // import path from 'path';
 
