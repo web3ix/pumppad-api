@@ -386,16 +386,6 @@ export class BondService {
                 c: result.map((row) => parseFloat(row.close).toFixed(8)),
                 v: result.map((row) => parseFloat(row.volume).toFixed(8)),
             };
-
-            return {
-                s: 'ok',
-                t: [1723424400, 1723424700, 1723425000], // Ensure these timestamps cover the requested range
-                c: [102.5, 104.0, 102], // Closing prices for each interval
-                o: [100.0, 102.0, 104.0], // Opening prices for each interval
-                h: [105.0, 104.5, 108], // High prices for each interval
-                l: [99.0, 101.5, 98], // Low prices for each interval
-                v: [1500, 2000, 3000],
-            };
         } catch (error) {
             console.log(
                 '🚀 ~ file: bond.service.ts:391 ~ BondService ~ getTokenOHCL ~ error:',
