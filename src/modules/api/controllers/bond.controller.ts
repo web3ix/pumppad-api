@@ -41,12 +41,7 @@ export class BondController {
         @Body('symbol') symbol: string,
         @Body('name') name: string,
         @Body('description') description: string,
-        @Body('website') website?: string,
-        @Body('twitter') twitter?: string,
-        @Body('telegram') telegram?: string,
-        @Body('discord') discord?: string,
-        @Body('anotherLink1') anotherLink1?: string,
-        @Body('anotherLink1') anotherLink2?: string,
+        @Body('link') link?: string,
     ) {
         return this.bondService.uploadMetadata({
             icon: files.icon[0],
@@ -54,6 +49,7 @@ export class BondController {
             symbol,
             name,
             description,
+            link,
         });
     }
 

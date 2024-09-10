@@ -431,12 +431,14 @@ export class BondService {
         symbol,
         name,
         description,
+        link,
     }: {
         icon: Express.Multer.File;
         banner?: Express.Multer.File;
         symbol: string;
         name: string;
         description: string;
+        link?: Object;
     }) {
         let metadata: any = {
             name,
@@ -457,7 +459,11 @@ export class BondService {
                 isPublic: true,
             });
 
-            metadata.banner = iconUrl;
+            metadata.banner = bannerUrl;
+        }
+
+        if (link) {
+            metadata.link = link;
         }
 
         const { url: metadataUrl } = await this.s3Service.uploadSingleJSON({
