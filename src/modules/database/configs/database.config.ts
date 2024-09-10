@@ -36,3 +36,9 @@ export const configQueue = registerAs(
         },
     }),
 );
+
+export enum METADATA_TYPE {
+    Metadata = 0,
+    Icon = 1,
+    Banner = 2,
+}

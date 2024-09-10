@@ -7,6 +7,8 @@ import {
     NetworkRepository,
     TradeRepository,
     TokenRepository,
+    MetadataRepository,
+    CommentRepository,
 } from './repositories';
 
 import { entities } from './configs/typeorm.config';
@@ -16,6 +18,8 @@ const repositories = [
     NetworkRepository,
     TokenRepository,
     TradeRepository,
+    MetadataRepository,
+    CommentRepository,
 ];
 
 const services = [];

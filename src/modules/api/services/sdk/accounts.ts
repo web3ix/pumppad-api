@@ -32,16 +32,16 @@ export const getConfigAccountPubKey = (
 	)[0];
 };
 
-export const getStepAccountPubKey = (
+export const getVaultReserveAccountPubKey = (
 	program: Program<Curve>,
 	configAccount: PublicKey,
-	stepId: anchor.BN
+	reserveToken: PublicKey
 ) => {
 	return anchor.web3.PublicKey.findProgramAddressSync(
 		[
-			getSeed("STEP_PDA_SEED", program),
+			getSeed("VAULT_RESERVE_PDA_SEED", program),
 			configAccount.toBuffer(),
-			toBuffer(stepId, "be", 8),
+			reserveToken.toBuffer(),
 		],
 		program.programId
 	)[0];

@@ -15,19 +15,6 @@ export class ChartController {
             supports_marks: false,
             supports_timescale_marks: false,
             supports_time: true,
-            exchanges: [
-                {
-                    value: 'AntSale',
-                    name: 'AntSale',
-                    desc: 'AntSale',
-                },
-            ],
-            symbols_types: [
-                {
-                    name: 'Crypto',
-                    value: 'crypto',
-                },
-            ],
             supported_resolutions: ['5', '60', 'D'],
         };
     }
@@ -41,8 +28,8 @@ export class ChartController {
     getSymbol(@Query('symbol') symbol: string) {
         return {
             name: symbol,
-            'exchange-traded': 'AntSale',
-            'exchange-listed': 'AntSale',
+            // 'exchange-traded': 'AntSale',
+            // 'exchange-listed': 'AntSale',
             timezone: 'America/New_York',
             session: '24x7',
             has_intraday: true,

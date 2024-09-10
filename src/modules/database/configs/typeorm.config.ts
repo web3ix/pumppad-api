@@ -2,15 +2,15 @@ import { DataSource, DataSourceOptions } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { config } from 'dotenv';
 import {
+    CommentEntity,
+    MetadataEntity,
     NetworkConfigEntity,
     NetworkEntity,
     TokenEntity,
     TradeEntity,
 } from '../entities';
-import { InitDB1722937546265 } from '../migrations/1722937546265-InitDB';
-import { SeedDB1722937553644 } from '../migrations/1722937553644-SeedDB';
-import { AddStep1722940061789 } from '../migrations/1722940061789-AddStep';
-import { AddSign1722940789718 } from '../migrations/1722940789718-AddSign';
+import { InitDB1725962114081 } from '../migrations/1725962114081-InitDB';
+import { SeedDB1725962271064 } from '../migrations/1725962271064-SeedDB';
 
 config();
 
@@ -21,14 +21,11 @@ export const entities = [
     NetworkEntity,
     TokenEntity,
     TradeEntity,
+    MetadataEntity,
+    CommentEntity,
 ];
 
-const migrations = [
-    InitDB1722937546265,
-    SeedDB1722937553644,
-    AddStep1722940061789,
-    AddSign1722940789718,
-];
+const migrations = [InitDB1725962114081, SeedDB1725962271064];
 
 export const dbConfig = {
     host: configService.get('DB_HOST'),

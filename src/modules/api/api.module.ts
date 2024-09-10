@@ -14,6 +14,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { configQueue } from '@/database/configs';
 import { BlockchainModule } from '@/blockchain';
 import { BondController } from './controllers/bond.controller';
+import { S3Service } from './services/s3.service';
 
 const controllers = [AuthController, BondController, ChartController];
 
@@ -23,6 +24,7 @@ const services = [
     ConsumerService,
     BondService,
     SocketService,
+    S3Service,
 ];
 
 @Module({

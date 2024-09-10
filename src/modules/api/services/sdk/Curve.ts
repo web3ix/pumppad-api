@@ -1,18 +1,30 @@
 import * as anchor from "@coral-xyz/anchor";
 import { BN, web3 } from "@coral-xyz/anchor";
-import { Connection, PublicKey, Transaction } from "@solana/web3.js";
+import {
+	Connection,
+	PublicKey,
+	Transaction,
+	SystemProgram,
+} from "@solana/web3.js";
 import {
 	TOKEN_METADATA_PROGRAM_ID,
 	getBondAccountPubKey,
 	getConfigAccountPubKey,
 	getMetadataAccountPubKey,
 	getMintAccountPubKey,
-	getStepAccountPubKey,
+	getVaultReserveAccountPubKey,
 	getVaultTokenAccountPubKey,
 } from "./accounts";
 import { Curve, IDL } from "./idl/curve";
 import { AUTHORITY, PROGRAM_ID } from "./constants";
 import { CurveEventHandlers, CurveEventType } from "./types";
+import { checkOrCreateAssociatedTokenAccount } from "./utils";
+import {
+	createSyncNativeInstruction,
+	getAssociatedTokenAddress,
+} from "@solana/spl-token";
+
+const WSOL = new PublicKey("So11111111111111111111111111111111111111112");
 
 export default class CurveSdk {
 	public connection: Connection;
@@ -50,16 +62,6 @@ export default class CurveSdk {
 		return this.configAccountData;
 	}
 
-	async fetchStepAccount(
-		stepId: anchor.BN,
-		commitment?: anchor.web3.Commitment
-	): Promise<anchor.IdlAccounts<Curve>["stepAccount"]> {
-		return this.program.account.stepAccount.fetch(
-			getStepAccountPubKey(this.program, this.configAccountPubKey, stepId),
-			commitment
-		);
-	}
-
 	async fetchBondAccount(
 		symbol: string,
 		commitment?: anchor.web3.Commitment
@@ -74,13 +76,21 @@ export default class CurveSdk {
 		);
 	}
 
-	private getCurrentStep(currentSupply: BN, ranges: BN[]): number {
-		for (let i = 0; i < 32; i++) {
-			if (currentSupply.lte(ranges[i])) {
-				return i;
-			}
-		}
-		throw new Error("Invalid Current Supply");
+	getAmountIn(amountOut: BN, reserveIn: BN, reserveOut: BN): BN {
+		const numerator = reserveIn.mul(amountOut).mul(this.WEI6);
+		const denominator = reserveOut
+			.sub(amountOut)
+			.mul(this.WEI6.sub(this.configAccountData.systemFee));
+		return numerator.div(denominator.add(new BN(1)));
+	}
+
+	getAmountOut(amountIn: BN, reserveIn: BN, reserveOut: BN): BN {
+		const amountWithFee = amountIn.mul(
+			this.WEI6.sub(this.configAccountData.systemFee)
+		);
+		const numerator = amountWithFee.mul(reserveOut);
+		const denominator = reserveIn.mul(this.WEI6).add(amountWithFee);
+		return numerator.div(denominator);
 	}
 
 	async fetchReserveToBuy(symbol: string, amount: BN): Promise<BN> {
@@ -104,56 +114,11 @@ export default class CurveSdk {
 		);
 		const bondAccount = await this.program.account.bondAccount.fetch(bondPda);
 
-		const stepPda = getStepAccountPubKey(
-			this.program,
-			this.configAccountPubKey,
-			bondAccount.stepId
+		return this.getAmountIn(
+			amount,
+			bondAccount.totalVirtualReserve,
+			bondAccount.totalVirtualCurve
 		);
-		const stepAccount = await this.program.account.stepAccount.fetch(stepPda);
-		let currentSupply = bondAccount.supplied;
-		let newSupply = amount.add(currentSupply);
-		if (newSupply.gt(this.MAX_SUPPLY)) throw new Error("Exceed Max Supply");
-
-		let tokenLeft = amount;
-		let reserveToBuy = new BN(0);
-		let supplyLeft = new BN(0);
-		let current_step = this.getCurrentStep(currentSupply, stepAccount.ranges);
-		for (let i = current_step; i < 32; i++) {
-			supplyLeft = stepAccount.ranges[i].sub(currentSupply);
-
-			if (supplyLeft.lt(tokenLeft)) {
-				if (supplyLeft.eq(new BN(0))) {
-					continue;
-				}
-
-				// ensure reserve is calculated with ceiling
-				reserveToBuy = reserveToBuy.add(
-					supplyLeft.mul(stepAccount.prices[i]).div(this.MULTI_FACTOR)
-				);
-				currentSupply = currentSupply.add(supplyLeft);
-				tokenLeft = tokenLeft.sub(supplyLeft);
-			} else {
-				// ensure reserve is calculated with ceiling
-				reserveToBuy = reserveToBuy.add(
-					tokenLeft.mul(stepAccount.prices[i]).div(this.MULTI_FACTOR)
-				);
-				tokenLeft = new BN(0);
-				break;
-			}
-		}
-		// tokensLeft > 0 -> can never happen
-		// reserveToBond == 0 -> can happen if a user tries to mint within the free minting range, which is prohibited by design.
-		if (reserveToBuy.eq(new BN(0)) || tokenLeft.gt(new BN(0)))
-			throw new Error("Invalid Token Amount");
-
-		const fee = this.configAccountData.systemFee
-			.mul(reserveToBuy)
-			.div(this.WEI6);
-		const royalty = this.configAccountData.buyRoyalty
-			.mul(reserveToBuy)
-			.div(this.WEI6);
-
-		return reserveToBuy.add(fee).add(royalty);
 	}
 
 	async fetchRefundForSell(symbol: string, amount: BN): Promise<BN> {
@@ -177,102 +142,66 @@ export default class CurveSdk {
 		);
 		const bondAccount = await this.program.account.bondAccount.fetch(bondPda);
 
-		const stepPda = getStepAccountPubKey(
-			this.program,
-			this.configAccountPubKey,
-			bondAccount.stepId
+		return this.getAmountOut(
+			amount,
+			bondAccount.totalVirtualCurve,
+			bondAccount.totalVirtualReserve
 		);
-		const stepAccount = await this.program.account.stepAccount.fetch(stepPda);
-
-		let currentSupply = bondAccount.supplied;
-		if (amount.gt(currentSupply)) throw new Error("Exceed Max Supply");
-
-		let tokenLeft = amount;
-		let reserveFromBond = new BN(0);
-		let currentStep = this.getCurrentStep(currentSupply, stepAccount.ranges);
-
-		while (tokenLeft.gt(new BN(0))) {
-			let supplyLeft = new BN(0);
-			if (currentStep == 0) {
-				supplyLeft = currentSupply;
-			} else {
-				currentSupply.sub(stepAccount.ranges[currentStep - 1]);
-			}
-
-			let tokensToProcess = new BN(0);
-			if (tokenLeft.lt(supplyLeft)) {
-				tokensToProcess = tokenLeft;
-			} else {
-				tokensToProcess = supplyLeft;
-			}
-
-			reserveFromBond = reserveFromBond.add(
-				tokensToProcess.mul(
-					stepAccount.prices[currentStep].div(this.MULTI_FACTOR)
-				)
-			);
-
-			tokenLeft = tokenLeft.sub(tokensToProcess);
-			currentSupply = currentSupply.sub(tokensToProcess);
-
-			if (currentStep > 0) {
-				currentStep -= 1;
-			}
-		}
-
-		// tokensLeft > 0 -> can never happen
-		if (tokenLeft.gt(new BN(0))) {
-			throw new Error("Invalid token amount");
-		}
-
-		const fee = this.configAccountData.systemFee
-			.mul(reserveFromBond)
-			.div(this.WEI6);
-		const royalty = this.configAccountData.buyRoyalty
-			.mul(reserveFromBond)
-			.div(this.WEI6);
-
-		return reserveFromBond.sub(fee).sub(royalty);
 	}
 
-	initialize(signer: PublicKey, feeWallet: PublicKey): Promise<Transaction> {
+	async initialize(
+		signer: PublicKey,
+		feeWallet: PublicKey,
+		reserveToken: PublicKey
+	): Promise<Transaction> {
 		if (this.configAccountPubKey) {
 			throw new Error("Config account already exists");
 		}
 		this.configAccountPubKey = getConfigAccountPubKey(this.program, signer);
-		return this.program.methods
+		const vaultReserveTokenPubkey = getVaultReserveAccountPubKey(
+			this.program,
+			this.configAccountPubKey,
+			reserveToken
+		);
+
+		const reserveTokenInfo = await this.connection.getParsedAccountInfo(
+			reserveToken
+		);
+		if (!reserveTokenInfo.value) {
+			throw Error("Invalid reserve token");
+		}
+
+		const tx = new Transaction();
+
+		const { tx: createFeeWalletAtaTx } =
+			await checkOrCreateAssociatedTokenAccount(
+				this.connection,
+				feeWallet,
+				signer,
+				reserveToken
+			);
+
+		if (createFeeWalletAtaTx) tx.add(createFeeWalletAtaTx);
+
+		const initTx = await this.program.methods
 			.initialize()
 			.accounts({
 				configAccount: this.configAccountPubKey,
 				authority: signer,
 				feeWallet: feeWallet,
+				reserveToken: reserveToken,
+				vaultReserveTokenAccount: vaultReserveTokenPubkey,
+				tokenProgram: reserveTokenInfo.value.owner,
 			})
 			.transaction();
+
+		tx.add(initTx);
+
+		return tx;
 	}
 
-	async addStep(
-		authority: PublicKey,
-		ranges: BN[],
-		prices: BN[]
-	): Promise<Transaction> {
-		const latestStepId = await this.fetchConfigAccount(
-			this.configAccountPubKey
-		).then((r) => r.lastStepId);
-
-		const stepPda = getStepAccountPubKey(
-			this.program,
-			this.configAccountPubKey,
-			latestStepId
-		);
-
-		return this.program.methods
-			.addStep(ranges, prices)
-			.accounts({
-				configAccount: this.configAccountPubKey,
-				stepAccount: stepPda,
-				authority,
-			})
-			.transaction();
+	getMintAccountPubKey(symbol: string): PublicKey {
+		return getMintAccountPubKey(this.program, this.configAccountPubKey, symbol);
 	}
 
 	async _createToken(
@@ -310,7 +239,7 @@ export default class CurveSdk {
 				payer: creator,
 				authority: this.configAccountData.authority,
 				tokenProgram: anchor.utils.token.TOKEN_PROGRAM_ID,
-				tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
+				// tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
 				rent: anchor.web3.SYSVAR_RENT_PUBKEY,
 				systemProgram: web3.SystemProgram.programId,
 			})
@@ -319,8 +248,7 @@ export default class CurveSdk {
 
 	async _activateToken(
 		creator: PublicKey,
-		symbol: string,
-		stepId: BN
+		symbol: string
 	): Promise<Transaction> {
 		const mintPubkey = getMintAccountPubKey(
 			this.program,
@@ -340,7 +268,7 @@ export default class CurveSdk {
 		);
 
 		return this.program.methods
-			.activateToken(symbol, stepId)
+			.activateToken(symbol)
 			.accounts({
 				bondAccount: bondPda,
 				mint: mintPubkey,
@@ -358,36 +286,44 @@ export default class CurveSdk {
 		creator: PublicKey,
 		name: string,
 		symbol: string,
-		uri: string,
-		stepId: BN
+		uri: string
 	): Promise<Transaction> {
 		const createTx = await this._createToken(creator, name, symbol, uri);
-		const activateTx = await this._activateToken(creator, symbol, stepId);
+		const activateTx = await this._activateToken(creator, symbol);
 		return new Transaction().add(createTx, activateTx);
 	}
 
 	async buyToken(
 		buyer: PublicKey,
 		symbol: string,
-		amount: BN,
-		maxReserveAmount: BN
+		amount: BN
 	): Promise<Transaction> {
+		const reserveToBuy = await this.fetchReserveToBuy(symbol, amount);
+
+		const reserveFee = reserveToBuy
+			.mul(this.configAccountData.systemFee)
+			.div(this.WEI6);
+
+		const reserveWithFee = reserveToBuy.add(reserveFee);
+
 		const mint = getMintAccountPubKey(
 			this.program,
 			this.configAccountPubKey,
 			symbol
 		);
 
-		const mintInfo = await this.connection.getParsedAccountInfo(mint);
+		const [mintInfo, reserveTokenInfo] = await Promise.all([
+			this.connection.getParsedAccountInfo(mint),
+			this.connection.getParsedAccountInfo(this.configAccountData.reserveToken),
+		]);
 
 		if (!mintInfo.value) {
 			throw Error("Token doesn't exists with symbol");
 		}
 
-		const buyerAta = await anchor.utils.token.associatedAddress({
-			mint: mint,
-			owner: buyer,
-		});
+		if (!reserveTokenInfo.value) {
+			throw Error("Invalid reserve token");
+		}
 
 		const vaultTokenPda = getVaultTokenAccountPubKey(
 			this.program,
@@ -401,28 +337,68 @@ export default class CurveSdk {
 			mint
 		);
 
-		const bondAccount = await this.program.account.bondAccount.fetch(bondPda);
-
-		const stepPda = getStepAccountPubKey(
+		const vaultReserveTokenPubkey = getVaultReserveAccountPubKey(
 			this.program,
 			this.configAccountPubKey,
-			bondAccount.stepId
+			this.configAccountData.reserveToken
 		);
 
+		const [
+			buyerAta,
+			{ ata: buyerReserveTokenAta, tx: createFeeWalletAtaTx },
+			feeWalletReserveTokenAta,
+		] = await Promise.all([
+			anchor.utils.token.associatedAddress({
+				mint: mint,
+				owner: buyer,
+			}),
+			checkOrCreateAssociatedTokenAccount(
+				this.connection,
+				buyer,
+				buyer,
+				this.configAccountData.reserveToken
+			),
+			getAssociatedTokenAddress(
+				this.configAccountData.reserveToken,
+				this.configAccountData.feeWallet,
+				false,
+				reserveTokenInfo.value.owner
+			),
+		]);
+
+		const tx = new Transaction();
+
+		// check and wrap sol to wsol
+		if (this.configAccountData.reserveToken.equals(WSOL)) {
+			if (createFeeWalletAtaTx) tx.add(createFeeWalletAtaTx);
+
+			tx.add(
+				SystemProgram.transfer({
+					fromPubkey: buyer,
+					toPubkey: buyerReserveTokenAta,
+					lamports: BigInt(reserveWithFee.toString()),
+				})
+			);
+
+			tx.add(createSyncNativeInstruction(buyerReserveTokenAta));
+		}
+
 		return this.program.methods
-			.buyToken(symbol, amount, maxReserveAmount)
+			.buyToken(symbol, amount)
 			.accounts({
 				buyerTokenAccount: buyerAta,
 				vaultTokenAccount: vaultTokenPda,
 				bondAccount: bondPda,
-				stepAccount: stepPda,
 				configAccount: this.configAccountPubKey,
+				buyerReserveTokenAccount: buyerReserveTokenAta,
+				vaultReserveTokenAccount: vaultReserveTokenPubkey,
+				feeReserveTokenAccount: feeWalletReserveTokenAta,
+				reserveToken: this.configAccountData.reserveToken,
 				mint,
 				buyer,
-				creator: bondAccount.creator,
-				feeWallet: this.configAccountData.feeWallet,
 				authority: this.configAccountData.authority,
 				tokenProgram: mintInfo.value.owner,
+				reserveTokenProgram: reserveTokenInfo.value.owner,
 				associatedTokenProgram: anchor.utils.token.ASSOCIATED_PROGRAM_ID,
 				rent: anchor.web3.SYSVAR_RENT_PUBKEY,
 				systemProgram: web3.SystemProgram.programId,
@@ -433,8 +409,7 @@ export default class CurveSdk {
 	async sellToken(
 		seller: PublicKey,
 		symbol: string,
-		amount: BN,
-		minReserveAmount: BN
+		amount: BN
 	): Promise<Transaction> {
 		const mint = getMintAccountPubKey(
 			this.program,
@@ -442,16 +417,18 @@ export default class CurveSdk {
 			symbol
 		);
 
-		const mintInfo = await this.connection.getParsedAccountInfo(mint);
+		const [mintInfo, reserveTokenInfo] = await Promise.all([
+			this.connection.getParsedAccountInfo(mint),
+			this.connection.getParsedAccountInfo(this.configAccountData.reserveToken),
+		]);
 
 		if (!mintInfo.value) {
 			throw Error("Token doesn't exists with symbol");
 		}
 
-		const sellerAta = await anchor.utils.token.associatedAddress({
-			mint: mint,
-			owner: seller,
-		});
+		if (!reserveTokenInfo.value) {
+			throw Error("Invalid reserve token");
+		}
 
 		const vaultTokenPda = getVaultTokenAccountPubKey(
 			this.program,
@@ -465,28 +442,48 @@ export default class CurveSdk {
 			mint
 		);
 
-		const bondAccount = await this.program.account.bondAccount.fetch(bondPda);
-
-		const stepPda = getStepAccountPubKey(
+		const vaultReserveTokenPubkey = getVaultReserveAccountPubKey(
 			this.program,
 			this.configAccountPubKey,
-			bondAccount.stepId
+			this.configAccountData.reserveToken
 		);
 
+		const [sellerAta, sellerReserveTokenAta, feeWalletReserveTokenAta] =
+			await Promise.all([
+				anchor.utils.token.associatedAddress({
+					mint: mint,
+					owner: seller,
+				}),
+				getAssociatedTokenAddress(
+					this.configAccountData.reserveToken,
+					seller,
+					false,
+					reserveTokenInfo.value.owner
+				),
+				getAssociatedTokenAddress(
+					this.configAccountData.reserveToken,
+					this.configAccountData.feeWallet,
+					false,
+					reserveTokenInfo.value.owner
+				),
+			]);
+
 		return this.program.methods
-			.sellToken(symbol, amount, minReserveAmount)
+			.sellToken(symbol, amount)
 			.accounts({
 				sellerTokenAccount: sellerAta,
 				vaultTokenAccount: vaultTokenPda,
 				bondAccount: bondPda,
-				stepAccount: stepPda,
 				configAccount: this.configAccountPubKey,
+				sellerReserveTokenAccount: sellerReserveTokenAta,
+				vaultReserveTokenAccount: vaultReserveTokenPubkey,
+				feeReserveTokenAccount: feeWalletReserveTokenAta,
+				reserveToken: this.configAccountData.reserveToken,
 				mint,
 				seller,
-				creator: bondAccount.creator,
-				feeWallet: this.configAccountData.feeWallet,
 				authority: this.configAccountData.authority,
 				tokenProgram: mintInfo.value.owner,
+				reserveTokenProgram: reserveTokenInfo.value.owner,
 				associatedTokenProgram: anchor.utils.token.ASSOCIATED_PROGRAM_ID,
 				rent: anchor.web3.SYSVAR_RENT_PUBKEY,
 				systemProgram: web3.SystemProgram.programId,

@@ -53,7 +53,6 @@ export class ConsumerService {
                         case 'ActivateTokenEvent':
                             await this.bondService.activateToken(
                                 event.data.token.toString(),
-                                +event.data.stepId.toString(),
                             );
                             break;
 

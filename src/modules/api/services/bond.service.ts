@@ -7,6 +7,7 @@ import { PublicKey } from '@solana/web3.js';
 import { BigNumber, ethers } from 'ethers';
 import { SocketService } from './socket.service';
 import { Between, LessThan } from 'typeorm';
+import { S3Service } from './s3.service';
 
 const PRECISION = BigNumber.from('1000000000000000000');
 
@@ -23,6 +24,8 @@ export class BondService {
         private tradeRepo: TradeRepository,
 
         private readonly socketClient: SocketService,
+
+        private readonly s3Service: S3Service,
     ) {}
 
     async createToken(
@@ -39,6 +42,9 @@ export class BondService {
 
         if (tokenEntity) return tokenEntity;
 
+        const res = await fetch(uri);
+        const metadata = await res.json();
+
         const newToken = new TokenEntity();
         newToken.token = token;
         newToken.creator = creator;
@@ -47,11 +53,24 @@ export class BondService {
         newToken.symbol = symbol;
         newToken.uri = uri;
         newToken.timestamp = timestamp;
+        if (metadata.image) {
+            newToken.icon = metadata.image;
+        }
+        if (metadata.banner) {
+            newToken.banner = metadata.banner;
+        }
+        if (metadata.description) {
+            newToken.desc = metadata.description;
+        }
+
+        if (metadata.links) {
+            newToken.link = JSON.parse(metadata.links);
+        }
 
         return this.tokenRepo.save(newToken);
     }
 
-    async activateToken(token: string, stepId: number) {
+    async activateToken(token: string) {
         const _token = await this.tokenRepo.findOne({
             where: {
                 token,
@@ -66,7 +85,6 @@ export class BondService {
             },
             {
                 activated: true,
-                stepId: stepId,
             },
         );
 
@@ -215,11 +233,14 @@ export class BondService {
             select: [
                 'id',
                 'token',
-                'stepId',
                 'creator',
                 'name',
                 'symbol',
                 'uri',
+                'icon',
+                'banner',
+                'desc',
+                'link',
                 'trades',
                 'lastPrice',
                 'timestamp',
@@ -242,11 +263,14 @@ export class BondService {
                 select: [
                     'id',
                     'token',
-                    'stepId',
                     'creator',
                     'name',
                     'symbol',
                     'uri',
+                    'icon',
+                    'banner',
+                    'desc',
+                    'link',
                     'trades',
                     'lastPrice',
                     'timestamp',
@@ -301,11 +325,15 @@ export class BondService {
                 'name',
                 'symbol',
                 'uri',
+                'icon',
+                'banner',
+                'desc',
+                'link',
                 'trades',
                 'lastPrice',
                 'timestamp',
             ],
-            take: 4,
+            take: 1,
             skip: 0,
         });
     }
@@ -380,11 +408,11 @@ export class BondService {
             return {
                 s: 'ok',
                 t: result.map((row) => row.time),
-                o: result.map((row) => parseFloat(row.open).toFixed(8)),
-                h: result.map((row) => parseFloat(row.high).toFixed(8)),
-                l: result.map((row) => parseFloat(row.low).toFixed(8)),
-                c: result.map((row) => parseFloat(row.close).toFixed(8)),
-                v: result.map((row) => parseFloat(row.volume).toFixed(8)),
+                o: result.map((row) => row.open),
+                h: result.map((row) => row.high),
+                l: result.map((row) => row.low),
+                c: result.map((row) => row.close),
+                // v: result.map((row) => parseFloat(row.volume).toFixed(8)),
             };
         } catch (error) {
             console.log(
@@ -395,5 +423,46 @@ export class BondService {
                 s: 'no_data',
             };
         }
+    }
+
+    async uploadMetadata({
+        icon,
+        banner,
+        symbol,
+        name,
+        description,
+    }: {
+        icon: Express.Multer.File;
+        banner?: Express.Multer.File;
+        symbol: string;
+        name: string;
+        description: string;
+    }) {
+        let metadata: any = {
+            name,
+            symbol,
+            description,
+        };
+
+        const { url: iconUrl } = await this.s3Service.uploadSingleFile({
+            file: icon,
+            isPublic: true,
+        });
+
+        metadata.image = iconUrl;
+
+        if (banner) {
+            const { url: bannerUrl } = await this.s3Service.uploadSingleFile({
+                file: icon,
+                isPublic: true,
+            });
+
+            metadata.banner = iconUrl;
+        }
+
+        const { url: metadataUrl } = await this.s3Service.uploadSingleJSON({
+            obj: metadata,
+        });
+        return metadataUrl;
     }
 }
