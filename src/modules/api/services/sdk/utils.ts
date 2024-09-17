@@ -1,4 +1,9 @@
-import { Connection, PublicKey, Transaction } from "@solana/web3.js";
+import {
+	Connection,
+	PublicKey,
+	Transaction,
+	LAMPORTS_PER_SOL,
+} from "@solana/web3.js";
 import * as anchor from "@coral-xyz/anchor";
 import {
 	createAssociatedTokenAccountInstruction,
@@ -118,4 +123,13 @@ export const sleep = (ms: number) =>
 export const randomInt = (min: number, max: number) => {
 	min = Math.max(1, min);
 	return Math.floor(Math.random() * (max - min + 1) + min);
+};
+
+export const getSolBalance = async (
+	connection: Connection,
+	owner: PublicKey
+) => {
+	const balance = await connection.getBalance(owner, "confirmed");
+
+	return balance / LAMPORTS_PER_SOL;
 };

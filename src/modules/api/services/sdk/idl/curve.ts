@@ -85,6 +85,16 @@ export type Curve = {
           "isSigner": false
         },
         {
+          "name": "feeWallet2",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "feeWallet3",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
           "name": "systemProgram",
           "isMut": false,
           "isSigner": false
@@ -270,6 +280,16 @@ export type Curve = {
           "isSigner": false
         },
         {
+          "name": "feeReserveTokenAccount2",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "feeReserveTokenAccount3",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
           "name": "vaultReserveTokenAccount",
           "isMut": true,
           "isSigner": false
@@ -365,6 +385,16 @@ export type Curve = {
         },
         {
           "name": "feeReserveTokenAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "feeReserveTokenAccount2",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "feeReserveTokenAccount3",
           "isMut": true,
           "isSigner": false
         },
@@ -540,6 +570,14 @@ export type Curve = {
           },
           {
             "name": "feeWallet",
+            "type": "publicKey"
+          },
+          {
+            "name": "feeWallet2",
+            "type": "publicKey"
+          },
+          {
+            "name": "feeWallet3",
             "type": "publicKey"
           },
           {
@@ -895,6 +933,16 @@ export const IDL: Curve = {
           "isSigner": false
         },
         {
+          "name": "feeWallet2",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "feeWallet3",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
           "name": "systemProgram",
           "isMut": false,
           "isSigner": false
@@ -1080,6 +1128,16 @@ export const IDL: Curve = {
           "isSigner": false
         },
         {
+          "name": "feeReserveTokenAccount2",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "feeReserveTokenAccount3",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
           "name": "vaultReserveTokenAccount",
           "isMut": true,
           "isSigner": false
@@ -1175,6 +1233,16 @@ export const IDL: Curve = {
         },
         {
           "name": "feeReserveTokenAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "feeReserveTokenAccount2",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "feeReserveTokenAccount3",
           "isMut": true,
           "isSigner": false
         },
@@ -1350,6 +1418,14 @@ export const IDL: Curve = {
           },
           {
             "name": "feeWallet",
+            "type": "publicKey"
+          },
+          {
+            "name": "feeWallet2",
+            "type": "publicKey"
+          },
+          {
+            "name": "feeWallet3",
             "type": "publicKey"
           },
           {
