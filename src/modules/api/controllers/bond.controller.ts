@@ -63,6 +63,11 @@ export class BondController {
         return this.bondService.getKingOfHill();
     }
 
+    @Get('/recent-trades')
+    getRecentTrade() {
+        return this.bondService.getRecentTrades();
+    }
+
     @Get('/tokens')
     getTokens(
         @Query('take') take?: number,

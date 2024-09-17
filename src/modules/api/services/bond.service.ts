@@ -431,6 +431,31 @@ export class BondService {
         });
     }
 
+    async getRecentTrades() {
+        return this.tradeRepo.find({
+            order: {
+                timestamp: 'DESC',
+            },
+            relations: {
+                token: true,
+            },
+            select: [
+                'id',
+                'token',
+                'isBuy',
+                'doer',
+                'amount',
+                'parseAmount',
+                'reserveAmount',
+                'parseAmount',
+                'parseReserveAmount',
+                'timestamp',
+            ],
+            take: 10,
+            skip: 0,
+        });
+    }
+
     async getStats() {
         const [tokens, trades, kingOfHill] = await Promise.all([
             this.getTokens(),
