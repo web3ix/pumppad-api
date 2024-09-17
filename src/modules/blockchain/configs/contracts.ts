@@ -5,7 +5,7 @@ export const CONTRACTS: Record<CHAIN_ID, any> = {
     [CHAIN_ID.SOLANA_DEVNET]: {
         PUMP: {
             deployedSignature:
-                '4Fo1CxLEzq9m9NfRX7tqHHfuicvfChM8bGwMFxfJp69PtuMx6XJdZF33RpHcAhoSAGZLKz5RZTM3PkQVidQNRCGm',
+                '5R89RGezQ8GhbN2rcBME1mbGahtPtuywbpWwiBwHrjsGMt67csn6kue8qQTDZ8Ww67YHGmgzZt72HJKHbUBwp7sg',
         },
     },
 };

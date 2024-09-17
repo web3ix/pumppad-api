@@ -15,7 +15,7 @@ export class ChartController {
             supports_marks: false,
             supports_timescale_marks: false,
             supports_time: true,
-            supported_resolutions: ['5', '60', 'D'],
+            supported_resolutions: ['5', '15', '30', '60'],
         };
     }
 
@@ -36,7 +36,7 @@ export class ChartController {
             visible_plots_set: 'ohlc',
             description: symbol,
             type: 'stock',
-            supported_resolutions: ['5'],
+            supported_resolutions: ['5', '15', '30', '60'],
             pricescale: 100,
             ticker: symbol,
         };
@@ -50,6 +50,7 @@ export class ChartController {
             query.symbol,
             query.from,
             query.to,
+            query.resolution,
         );
     }
 }

@@ -2,7 +2,12 @@ import { EvmService } from '@/blockchain/services';
 import { TradeEntity, TokenEntity } from '@/database/entities';
 import { TradeRepository, TokenRepository } from '@/database/repositories';
 import { PumpAbi } from '@/shared/blockchain/abis';
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+    BadRequestException,
+    Inject,
+    Injectable,
+    NotFoundException,
+} from '@nestjs/common';
 import { PublicKey } from '@solana/web3.js';
 import { BigNumber, ethers } from 'ethers';
 import { SocketService } from './socket.service';
@@ -45,6 +50,9 @@ export class BondService {
         const res = await fetch(uri);
         const metadata = await res.json();
 
+        if (!metadata.image || !metadata.banner || !metadata.description)
+            return;
+
         const newToken = new TokenEntity();
         newToken.token = token;
         newToken.creator = creator;
@@ -53,18 +61,21 @@ export class BondService {
         newToken.symbol = symbol;
         newToken.uri = uri;
         newToken.timestamp = timestamp;
-        if (metadata.image) {
-            newToken.icon = metadata.image;
-        }
-        if (metadata.banner) {
-            newToken.banner = metadata.banner;
-        }
-        if (metadata.description) {
-            newToken.desc = metadata.description;
+        newToken.supplied = '0';
+        newToken.reserve = '0';
+        newToken.parsedSupplied = 0;
+        newToken.parsedReserve = 0;
+        newToken.lastPrice = 0.000000013;
+        newToken.icon = metadata.image;
+        newToken.banner = metadata.banner;
+        newToken.desc = metadata.description;
+
+        if (metadata.link) {
+            newToken.link = JSON.parse(metadata.link);
         }
 
-        if (metadata.links) {
-            newToken.link = JSON.parse(metadata.links);
+        if (metadata.tokenomics) {
+            newToken.tokenomics = JSON.parse(metadata.tokenomics);
         }
 
         return this.tokenRepo.save(newToken);
@@ -77,6 +88,8 @@ export class BondService {
                 activated: false,
             },
         });
+
+        if (!_token) return;
 
         await this.tokenRepo.update(
             {
@@ -105,6 +118,8 @@ export class BondService {
         buyer: string,
         amount: string,
         reserveAmount: string,
+        totalSupply: string,
+        totalReserve: string,
         timestamp: number,
     ) {
         const tokenEntity = await this.tokenRepo.findOne({
@@ -134,6 +149,8 @@ export class BondService {
         );
 
         let trade: TradeEntity;
+        const parsedTotalReserve = +ethers.utils.formatUnits(totalReserve, 9);
+        const parsedTotalSupplied = +ethers.utils.formatUnits(totalSupply, 9);
         await this.tradeRepo.manager.transaction(
             async (transactionalEntityManager) => {
                 trade = await this.tradeRepo.save(buyEvent);
@@ -141,6 +158,10 @@ export class BondService {
                     { token },
                     {
                         lastPrice,
+                        reserve: totalReserve,
+                        supplied: totalSupply,
+                        parsedReserve: parsedTotalReserve,
+                        parsedSupplied: parsedTotalSupplied,
                     },
                 );
             },
@@ -158,6 +179,10 @@ export class BondService {
             buyEvent.parseReserveAmount,
             buyEvent.timestamp,
             lastPrice,
+            totalSupply,
+            totalReserve,
+            parsedTotalSupplied,
+            parsedTotalReserve,
         );
     }
 
@@ -167,6 +192,8 @@ export class BondService {
         seller: string,
         amount: string,
         reserveAmount: string,
+        totalSupply: string,
+        totalReserve: string,
         timestamp: number,
     ) {
         const tokenEntity = await this.tokenRepo.findOne({
@@ -195,6 +222,8 @@ export class BondService {
             18,
         );
         let trade: TradeEntity;
+        const parsedTotalReserve = +ethers.utils.formatUnits(totalReserve, 9);
+        const parsedTotalSupplied = +ethers.utils.formatUnits(totalSupply, 9);
         await this.tradeRepo.manager.transaction(
             async (transactionalEntityManager) => {
                 trade = await this.tradeRepo.save(sellEvent);
@@ -202,6 +231,10 @@ export class BondService {
                     { token },
                     {
                         lastPrice,
+                        reserve: totalReserve,
+                        supplied: totalSupply,
+                        parsedReserve: parsedTotalReserve,
+                        parsedSupplied: parsedTotalSupplied,
                     },
                 );
             },
@@ -219,14 +252,31 @@ export class BondService {
             sellEvent.parseReserveAmount,
             sellEvent.timestamp,
             lastPrice,
+            totalSupply,
+            totalReserve,
+            parsedTotalSupplied,
+            parsedTotalReserve,
         );
     }
 
-    async getTokens(take: number = 10, skip: number = 0) {
+    async getTokens(
+        take: number = 10,
+        skip: number = 0,
+        type?: string,
+        age?: number,
+        minProgress?: number,
+        maxProgress?: number,
+        owner?: string,
+    ) {
         return this.tokenRepo.find({
-            where: {
-                activated: true,
-            },
+            where: owner
+                ? {
+                      creator: owner,
+                      activated: true,
+                  }
+                : {
+                      activated: true,
+                  },
             order: {
                 updatedAt: 'DESC',
             },
@@ -244,9 +294,46 @@ export class BondService {
                 'trades',
                 'lastPrice',
                 'timestamp',
+                'supplied',
+                'reserve',
+                'parsedSupplied',
+                'parsedReserve',
             ],
             take,
             skip,
+        });
+    }
+
+    async getTopTokens() {
+        return this.tokenRepo.find({
+            where: {
+                activated: true,
+            },
+            order: {
+                updatedAt: 'DESC',
+                parsedReserve: 'DESC',
+            },
+            select: [
+                'id',
+                'token',
+                'creator',
+                'name',
+                'symbol',
+                'uri',
+                'icon',
+                'banner',
+                'desc',
+                'link',
+                'trades',
+                'lastPrice',
+                'timestamp',
+                'supplied',
+                'reserve',
+                'parsedSupplied',
+                'parsedReserve',
+            ],
+            take: 10,
+            skip: 0,
         });
     }
 
@@ -274,6 +361,10 @@ export class BondService {
                     'trades',
                     'lastPrice',
                     'timestamp',
+                    'supplied',
+                    'reserve',
+                    'parsedSupplied',
+                    'parsedReserve',
                 ],
                 order: {
                     trades: {
@@ -308,7 +399,7 @@ export class BondService {
     }
 
     async getKingOfHill() {
-        return this.tokenRepo.find({
+        return this.tokenRepo.findOne({
             where: {
                 activated: true,
             },
@@ -332,9 +423,11 @@ export class BondService {
                 'trades',
                 'lastPrice',
                 'timestamp',
+                'supplied',
+                'reserve',
+                'parsedSupplied',
+                'parsedReserve',
             ],
-            take: 1,
-            skip: 0,
         });
     }
 
@@ -352,7 +445,12 @@ export class BondService {
         };
     }
 
-    async getTokenOHCL(symbol: string, from: number, to: number) {
+    async getTokenOHCL(
+        symbol: string,
+        from: number,
+        to: number,
+        resolution: string,
+    ) {
         try {
             const token = await this.tokenRepo.findOne({
                 where: { symbol },
@@ -376,29 +474,30 @@ export class BondService {
             const result = await this.tradeRepo.query(
                 `
                 SELECT 
-
-                    FLOOR(EXTRACT(EPOCH FROM to_timestamp("timestamp")) / 300) * 300 AS time,
+                    time,
                     MIN("parseReserveAmount" / "parseAmount") AS low, 
                     MAX("parseReserveAmount" / "parseAmount") AS high,
-                    MIN(open) as open,
+                    COALESCE(LAG(close) OVER (ORDER BY time), open) AS open,
                     MIN(close) as close,
                     SUM("parseReserveAmount") as volume
                 FROM (
                     select
-                        "timestamp", "parseReserveAmount", "parseAmount",
+                        FLOOR(EXTRACT(EPOCH FROM to_timestamp("timestamp")) / 300) * 300 AS time, 
+                        "parseReserveAmount", 
+                        "parseAmount",
                         FIRST_VALUE("parseReserveAmount" / "parseAmount") over (
-                        PARTITION BY FLOOR(EXTRACT(EPOCH FROM to_timestamp("timestamp")) / 300) * 300 ORDER BY "timestamp" ASC
-                        RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-                    ) as open,
-                    FIRST_VALUE("parseReserveAmount" / "parseAmount") over (
-                        PARTITION BY FLOOR(EXTRACT(EPOCH FROM to_timestamp("timestamp")) / 300) * 300 ORDER BY "timestamp" DESC
-                        RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-                    ) as close
+                            PARTITION BY FLOOR(EXTRACT(EPOCH FROM to_timestamp("timestamp")) / 300) * 300 ORDER BY "timestamp" ASC
+                            RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                            ) as open,
+                        FIRST_VALUE("parseReserveAmount" / "parseAmount") over (
+                            PARTITION BY FLOOR(EXTRACT(EPOCH FROM to_timestamp("timestamp")) / 300) * 300 ORDER BY "timestamp" DESC
+                            RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+                        ) as close
                     from "trade"
                     WHERE ( "trade"."tokenId" = '${token.id}') 	
                 ) as tmp
 
-                GROUP BY time
+                GROUP BY time, open, close
                 ORDER BY time asc
 
                 `,
@@ -431,15 +530,20 @@ export class BondService {
         symbol,
         name,
         description,
+        tokenomics,
         link,
     }: {
         icon: Express.Multer.File;
-        banner?: Express.Multer.File;
+        banner: Express.Multer.File;
         symbol: string;
         name: string;
         description: string;
-        link?: Object;
+        tokenomics?: string;
+        link?: string;
     }) {
+        if (!icon || !banner || !symbol || !name || !description)
+            throw new BadRequestException('Invalid required fields');
+
         let metadata: any = {
             name,
             symbol,
@@ -453,17 +557,19 @@ export class BondService {
 
         metadata.image = iconUrl;
 
-        if (banner) {
-            const { url: bannerUrl } = await this.s3Service.uploadSingleFile({
-                file: icon,
-                isPublic: true,
-            });
+        const { url: bannerUrl } = await this.s3Service.uploadSingleFile({
+            file: banner,
+            isPublic: true,
+        });
 
-            metadata.banner = bannerUrl;
-        }
+        metadata.banner = bannerUrl;
 
         if (link) {
             metadata.link = link;
+        }
+
+        if (tokenomics) {
+            metadata.tokenomics = tokenomics;
         }
 
         const { url: metadataUrl } = await this.s3Service.uploadSingleJSON({

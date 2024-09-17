@@ -38,6 +38,7 @@ export default class CurveSdk {
 	public WEI6 = new BN("1000000");
 	public MULTI_FACTOR = new BN("1000000000");
 	public MAX_SUPPLY = new BN("500000000").mul(this.MULTI_FACTOR);
+	public MAX_STEP = 48;
 
 	constructor(connection: Connection, programId: PublicKey = PROGRAM_ID) {
 		this.connection = connection;
@@ -76,24 +77,22 @@ export default class CurveSdk {
 		);
 	}
 
-	getAmountIn(amountOut: BN, reserveIn: BN, reserveOut: BN): BN {
-		const numerator = reserveIn.mul(amountOut).mul(this.WEI6);
-		const denominator = reserveOut
-			.sub(amountOut)
-			.mul(this.WEI6.sub(this.configAccountData.systemFee));
-		return numerator.div(denominator.add(new BN(1)));
+	private getCurrentStep(currentSupply: BN, ranges: BN[]): number {
+		for (let i = 0; i < this.MAX_STEP; i++) {
+			if (currentSupply.lte(ranges[i])) {
+				return i;
+			}
+		}
+		throw new Error("Invalid Current Supply");
 	}
 
-	getAmountOut(amountIn: BN, reserveIn: BN, reserveOut: BN): BN {
-		const amountWithFee = amountIn.mul(
-			this.WEI6.sub(this.configAccountData.systemFee)
-		);
-		const numerator = amountWithFee.mul(reserveOut);
-		const denominator = reserveIn.mul(this.WEI6).add(amountWithFee);
-		return numerator.div(denominator);
-	}
-
-	async fetchReserveToBuy(symbol: string, amount: BN): Promise<BN> {
+	async fetchReserveToBuy(
+		symbol: string,
+		amount: BN
+	): Promise<{
+		reserve: BN;
+		fee: BN;
+	}> {
 		if (amount.eq(new BN(0))) throw new Error("Non zero to buy");
 
 		const mint = getMintAccountPubKey(
@@ -114,14 +113,64 @@ export default class CurveSdk {
 		);
 		const bondAccount = await this.program.account.bondAccount.fetch(bondPda);
 
-		return this.getAmountIn(
-			amount,
-			bondAccount.totalVirtualReserve,
-			bondAccount.totalVirtualCurve
+		let currentSupply = bondAccount.supplied;
+		let newSupply = amount.add(currentSupply);
+		if (newSupply.gt(this.MAX_SUPPLY)) throw new Error("Exceed Max Supply");
+
+		let tokenLeft = amount;
+		let reserveToBuy = new BN(0);
+		let supplyLeft = new BN(0);
+		let current_step = this.getCurrentStep(
+			currentSupply,
+			this.configAccountData.ranges
 		);
+		for (let i = current_step; i < this.MAX_STEP; i++) {
+			supplyLeft = this.configAccountData.ranges[i].sub(currentSupply);
+
+			if (supplyLeft.lt(tokenLeft)) {
+				if (supplyLeft.eq(new BN(0))) {
+					continue;
+				}
+
+				// ensure reserve is calculated with ceiling
+				reserveToBuy = reserveToBuy.add(
+					supplyLeft
+						.mul(this.configAccountData.prices[i])
+						.div(this.MULTI_FACTOR)
+				);
+				currentSupply = currentSupply.add(supplyLeft);
+				tokenLeft = tokenLeft.sub(supplyLeft);
+			} else {
+				// ensure reserve is calculated with ceiling
+				reserveToBuy = reserveToBuy.add(
+					tokenLeft.mul(this.configAccountData.prices[i]).div(this.MULTI_FACTOR)
+				);
+				tokenLeft = new BN(0);
+				break;
+			}
+		}
+		// tokensLeft > 0 -> can never happen
+		// reserveToBond == 0 -> can happen if a user tries to mint within the free minting range, which is prohibited by design.
+		if (reserveToBuy.eq(new BN(0)) || tokenLeft.gt(new BN(0)))
+			throw new Error("Invalid Token Amount");
+
+		const fee = this.configAccountData.systemFee
+			.mul(reserveToBuy)
+			.div(this.WEI6);
+
+		return {
+			reserve: reserveToBuy.add(fee),
+			fee,
+		};
 	}
 
-	async fetchRefundForSell(symbol: string, amount: BN): Promise<BN> {
+	async fetchRefundForSell(
+		symbol: string,
+		amount: BN
+	): Promise<{
+		reserve: BN;
+		fee: BN;
+	}> {
 		if (amount.eq(new BN(0))) throw new Error("Non zero for sell");
 
 		const mint = getMintAccountPubKey(
@@ -142,17 +191,65 @@ export default class CurveSdk {
 		);
 		const bondAccount = await this.program.account.bondAccount.fetch(bondPda);
 
-		return this.getAmountOut(
-			amount,
-			bondAccount.totalVirtualCurve,
-			bondAccount.totalVirtualReserve
+		let currentSupply = bondAccount.supplied;
+		if (amount.gt(currentSupply)) throw new Error("Exceed Max Supply");
+
+		let tokenLeft = amount;
+		let reserveFromBond = new BN(0);
+		let currentStep = this.getCurrentStep(
+			currentSupply,
+			this.configAccountData.ranges
 		);
+
+		while (tokenLeft.gt(new BN(0))) {
+			let supplyLeft = new BN(0);
+			if (currentStep == 0) {
+				supplyLeft = currentSupply;
+			} else {
+				currentSupply.sub(this.configAccountData.ranges[currentStep - 1]);
+			}
+
+			let tokensToProcess = new BN(0);
+			if (tokenLeft.lt(supplyLeft)) {
+				tokensToProcess = tokenLeft;
+			} else {
+				tokensToProcess = supplyLeft;
+			}
+
+			reserveFromBond = reserveFromBond.add(
+				tokensToProcess.mul(this.configAccountData.prices[currentStep])
+			);
+
+			tokenLeft = tokenLeft.sub(tokensToProcess);
+			currentSupply = currentSupply.sub(tokensToProcess);
+
+			if (currentStep > 0) {
+				currentStep -= 1;
+			}
+		}
+
+		// tokensLeft > 0 -> can never happen
+		if (tokenLeft.gt(new BN(0))) {
+			throw new Error("Invalid token amount");
+		}
+
+		reserveFromBond = reserveFromBond.div(this.MULTI_FACTOR);
+		const fee = this.configAccountData.systemFee
+			.mul(reserveFromBond)
+			.div(this.WEI6);
+
+		return {
+			reserve: reserveFromBond.sub(fee),
+			fee,
+		};
 	}
 
 	async initialize(
 		signer: PublicKey,
 		feeWallet: PublicKey,
-		reserveToken: PublicKey
+		reserveToken: PublicKey,
+		ranges: BN[],
+		prices: BN[]
 	): Promise<Transaction> {
 		if (this.configAccountPubKey) {
 			throw new Error("Config account already exists");
@@ -184,7 +281,7 @@ export default class CurveSdk {
 		if (createFeeWalletAtaTx) tx.add(createFeeWalletAtaTx);
 
 		const initTx = await this.program.methods
-			.initialize()
+			.initialize(ranges, prices)
 			.accounts({
 				configAccount: this.configAccountPubKey,
 				authority: signer,
@@ -200,8 +297,21 @@ export default class CurveSdk {
 		return tx;
 	}
 
-	getMintAccountPubKey(symbol: string): PublicKey {
+	getTokenPda(symbol: string): PublicKey {
 		return getMintAccountPubKey(this.program, this.configAccountPubKey, symbol);
+	}
+
+	async checkTokenExist(symbol: string) {
+		const mintPubkey = getMintAccountPubKey(
+			this.program,
+			this.configAccountPubKey,
+			symbol
+		);
+
+		const mintInfo = await this.connection.getParsedAccountInfo(mintPubkey);
+		if (mintInfo.value) {
+			throw Error("Exists token with symbol");
+		}
 	}
 
 	async _createToken(
@@ -239,7 +349,7 @@ export default class CurveSdk {
 				payer: creator,
 				authority: this.configAccountData.authority,
 				tokenProgram: anchor.utils.token.TOKEN_PROGRAM_ID,
-				// tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
+				tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
 				rent: anchor.web3.SYSVAR_RENT_PUBKEY,
 				systemProgram: web3.SystemProgram.programId,
 			})
@@ -286,26 +396,35 @@ export default class CurveSdk {
 		creator: PublicKey,
 		name: string,
 		symbol: string,
-		uri: string
+		uri: string,
+		initBuy?: BN
 	): Promise<Transaction> {
+		const tx = new Transaction();
 		const createTx = await this._createToken(creator, name, symbol, uri);
 		const activateTx = await this._activateToken(creator, symbol);
-		return new Transaction().add(createTx, activateTx);
+		tx.add(createTx, activateTx);
+
+		if (initBuy) {
+			const buyTx = await this.buyToken(
+				creator,
+				symbol,
+				initBuy,
+				initBuy,
+				true
+			);
+			tx.add(buyTx);
+		}
+
+		return tx;
 	}
 
 	async buyToken(
 		buyer: PublicKey,
 		symbol: string,
-		amount: BN
+		amount: BN,
+		maxReserveAmount: BN,
+		init: boolean = false
 	): Promise<Transaction> {
-		const reserveToBuy = await this.fetchReserveToBuy(symbol, amount);
-
-		const reserveFee = reserveToBuy
-			.mul(this.configAccountData.systemFee)
-			.div(this.WEI6);
-
-		const reserveWithFee = reserveToBuy.add(reserveFee);
-
 		const mint = getMintAccountPubKey(
 			this.program,
 			this.configAccountPubKey,
@@ -317,8 +436,10 @@ export default class CurveSdk {
 			this.connection.getParsedAccountInfo(this.configAccountData.reserveToken),
 		]);
 
-		if (!mintInfo.value) {
-			throw Error("Token doesn't exists with symbol");
+		if (!init) {
+			if (!mintInfo.value) {
+				throw Error("Token doesn't exists with symbol");
+			}
 		}
 
 		if (!reserveTokenInfo.value) {
@@ -345,7 +466,7 @@ export default class CurveSdk {
 
 		const [
 			buyerAta,
-			{ ata: buyerReserveTokenAta, tx: createFeeWalletAtaTx },
+			{ ata: buyerReserveTokenAta, tx: createBuyerReserveAtaTx },
 			feeWalletReserveTokenAta,
 		] = await Promise.all([
 			anchor.utils.token.associatedAddress({
@@ -368,9 +489,19 @@ export default class CurveSdk {
 
 		const tx = new Transaction();
 
+		if (createBuyerReserveAtaTx) tx.add(createBuyerReserveAtaTx);
+
 		// check and wrap sol to wsol
 		if (this.configAccountData.reserveToken.equals(WSOL)) {
-			if (createFeeWalletAtaTx) tx.add(createFeeWalletAtaTx);
+			const { reserve: reserveToBuy } = await this.fetchReserveToBuy(
+				symbol,
+				amount
+			);
+			const reserveFee = reserveToBuy
+				.mul(this.configAccountData.systemFee)
+				.div(this.WEI6);
+
+			const reserveWithFee = reserveToBuy.add(reserveFee);
 
 			tx.add(
 				SystemProgram.transfer({
@@ -383,8 +514,8 @@ export default class CurveSdk {
 			tx.add(createSyncNativeInstruction(buyerReserveTokenAta));
 		}
 
-		return this.program.methods
-			.buyToken(symbol, amount)
+		const buyTx = await this.program.methods
+			.buyToken(symbol, amount, maxReserveAmount)
 			.accounts({
 				buyerTokenAccount: buyerAta,
 				vaultTokenAccount: vaultTokenPda,
@@ -397,19 +528,26 @@ export default class CurveSdk {
 				mint,
 				buyer,
 				authority: this.configAccountData.authority,
-				tokenProgram: mintInfo.value.owner,
+				tokenProgram: init
+					? anchor.utils.token.TOKEN_PROGRAM_ID
+					: mintInfo.value.owner,
 				reserveTokenProgram: reserveTokenInfo.value.owner,
 				associatedTokenProgram: anchor.utils.token.ASSOCIATED_PROGRAM_ID,
 				rent: anchor.web3.SYSVAR_RENT_PUBKEY,
 				systemProgram: web3.SystemProgram.programId,
 			})
 			.transaction();
+
+		tx.add(buyTx);
+
+		return tx;
 	}
 
 	async sellToken(
 		seller: PublicKey,
 		symbol: string,
-		amount: BN
+		amount: BN,
+		minReserveAmount: BN
 	): Promise<Transaction> {
 		const mint = getMintAccountPubKey(
 			this.program,
@@ -469,7 +607,7 @@ export default class CurveSdk {
 			]);
 
 		return this.program.methods
-			.sellToken(symbol, amount)
+			.sellToken(symbol, amount, minReserveAmount)
 			.accounts({
 				sellerTokenAccount: sellerAta,
 				vaultTokenAccount: vaultTokenPda,

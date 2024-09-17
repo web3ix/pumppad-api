@@ -9,8 +9,9 @@ import {
     TokenEntity,
     TradeEntity,
 } from '../entities';
-import { InitDB1725962114081 } from '../migrations/1725962114081-InitDB';
-import { SeedDB1725962271064 } from '../migrations/1725962271064-SeedDB';
+import { InitDB1726551687048 } from '../migrations/1726551687048-InitDB';
+import { SeedDB1726551701922 } from '../migrations/1726551701922-SeedDB';
+import { AddTokennomics1726552602299 } from '../migrations/1726552602299-AddTokennomics';
 
 config();
 
@@ -25,7 +26,11 @@ export const entities = [
     CommentEntity,
 ];
 
-const migrations = [InitDB1725962114081, SeedDB1725962271064];
+const migrations = [
+    InitDB1726551687048,
+    SeedDB1726551701922,
+    AddTokennomics1726552602299,
+];
 
 export const dbConfig = {
     host: configService.get('DB_HOST'),

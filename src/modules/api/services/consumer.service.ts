@@ -15,7 +15,7 @@ export class ConsumerService {
     ) {}
 
     @Process('SOLANA_PUMP_TXN_LOGS')
-    async processOTCTxnLogsEvm(
+    async processOTCTxnLogsSolana(
         job: Job<{ chainId: CHAIN_ID; signatures: string[] }>,
     ) {
         const { signatures, chainId } = job.data;
@@ -63,6 +63,8 @@ export class ConsumerService {
                                 event.data.buyer.toString(),
                                 event.data.amount.toString(),
                                 event.data.reserve.toString(),
+                                event.data.totalSupply.toString(),
+                                event.data.totalReserve.toString(),
                                 tx.blockTime,
                             );
                             break;
@@ -74,6 +76,8 @@ export class ConsumerService {
                                 event.data.seller.toString(),
                                 event.data.amount.toString(),
                                 event.data.reserve.toString(),
+                                event.data.totalSupply.toString(),
+                                event.data.totalReserve.toString(),
                                 tx.blockTime,
                             );
                             break;

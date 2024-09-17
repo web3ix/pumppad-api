@@ -73,6 +73,10 @@ export class SocketService implements OnGatewayConnection, OnGatewayDisconnect {
         parseReserveAmount: number,
         timestamp: number,
         lastPrice: number,
+        totalSupply: string,
+        totalReserve: string,
+        parsedTotalSupplied: number,
+        parsedTotalReserve: number,
     ) {
         this.server.emit('new-trade', {
             id,

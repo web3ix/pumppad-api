@@ -79,6 +79,7 @@ export class NativeError extends Error {
 	constructor(
 		readonly code: number,
 		readonly msg: string,
+		// @ts-ignore
 		readonly data: Object = null,
 		...params: any[]
 	) {
@@ -90,6 +91,7 @@ export class NativeError extends Error {
 		if (error.logs) {
 			errorString += error.logs.join(" ");
 		}
+		// @ts-ignore
 		for (const [code, [errorSubstring, msg]] of NATIVE_ERRORS.entries()) {
 			if (
 				errorString.includes(errorSubstring) ||
@@ -186,6 +188,7 @@ export function parseError(err: any) {
 
 	const programError = anchor.ProgramError.parse(err, idlErrors);
 	if (typeof err == typeof 0 && idlErrors.has(err)) {
+		// @ts-ignore
 		return new NativeAnchorError(parseInt(err), idlErrors.get(err), [], []);
 	}
 	if (programError) {

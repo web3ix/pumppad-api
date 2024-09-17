@@ -3,8 +3,8 @@ import { NetworkConfigEntity, NetworkEntity } from '../entities';
 import { CHAINS, CHAIN_ID, CONTRACTS } from '../../blockchain/configs';
 import { CONFIG_KEYS } from '../../../shared/constants';
 
-export class SeedDB1725962271064 implements MigrationInterface {
-    name = 'SeedDB1725962271064';
+export class SeedDB1726551701922 implements MigrationInterface {
+    name = 'SeedDB1726551701922';
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.manager.query(

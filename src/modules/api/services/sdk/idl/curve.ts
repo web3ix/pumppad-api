@@ -43,24 +43,16 @@ export type Curve = {
       "value": "1_000_000"
     },
     {
+      "name": "MAX_STEP",
+      "type": {
+        "defined": "usize"
+      },
+      "value": "32"
+    },
+    {
       "name": "TOTAL_SUPPLY",
       "type": "u64",
       "value": "1_000_000_000_000_000_000_u64"
-    },
-    {
-      "name": "TOTAL_VIRTUAL_CURVE",
-      "type": "u64",
-      "value": "1_000_000_000_000_000_000_u64"
-    },
-    {
-      "name": "TOTAL_VIRTUAL_RESERVE",
-      "type": "u64",
-      "value": "50_000_000_000_u64"
-    },
-    {
-      "name": "TARGET_RESERVE",
-      "type": "u64",
-      "value": "50_000_000_000_u64"
     }
   ],
   "instructions": [
@@ -103,7 +95,26 @@ export type Curve = {
           "isSigner": false
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "ranges",
+          "type": {
+            "array": [
+              "u64",
+              32
+            ]
+          }
+        },
+        {
+          "name": "prices",
+          "type": {
+            "array": [
+              "u64",
+              32
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "createToken",
@@ -150,6 +161,11 @@ export type Curve = {
         },
         {
           "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "tokenMetadataProgram",
           "isMut": false,
           "isSigner": false
         }
@@ -312,6 +328,10 @@ export type Curve = {
         {
           "name": "amount",
           "type": "u64"
+        },
+        {
+          "name": "maxReserve",
+          "type": "u64"
         }
       ]
     },
@@ -407,6 +427,10 @@ export type Curve = {
         {
           "name": "amount",
           "type": "u64"
+        },
+        {
+          "name": "minReserve",
+          "type": "u64"
         }
       ]
     },
@@ -483,19 +507,11 @@ export type Curve = {
             "type": "bool"
           },
           {
-            "name": "totalVirtualCurve",
+            "name": "supplied",
             "type": "u64"
           },
           {
-            "name": "totalVirtualReserve",
-            "type": "u64"
-          },
-          {
-            "name": "totalCurve",
-            "type": "u64"
-          },
-          {
-            "name": "totalReserve",
+            "name": "reserve",
             "type": "u64"
           },
           {
@@ -529,6 +545,24 @@ export type Curve = {
           {
             "name": "systemFee",
             "type": "u64"
+          },
+          {
+            "name": "ranges",
+            "type": {
+              "array": [
+                "u64",
+                32
+              ]
+            }
+          },
+          {
+            "name": "prices",
+            "type": {
+              "array": [
+                "u64",
+                32
+              ]
+            }
           },
           {
             "name": "bump",
@@ -631,6 +665,16 @@ export type Curve = {
           "name": "reserve",
           "type": "u64",
           "index": false
+        },
+        {
+          "name": "totalSupply",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "totalReserve",
+          "type": "u64",
+          "index": false
         }
       ]
     },
@@ -659,6 +703,16 @@ export type Curve = {
         },
         {
           "name": "reserve",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "totalSupply",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "totalReserve",
           "type": "u64",
           "index": false
         }
@@ -745,6 +799,11 @@ export type Curve = {
       "code": 6015,
       "name": "Completed",
       "msg": "Bonding Curve Completed"
+    },
+    {
+      "code": 6016,
+      "name": "OverSlippage",
+      "msg": "Over Slippage"
     }
   ]
 };
@@ -794,24 +853,16 @@ export const IDL: Curve = {
       "value": "1_000_000"
     },
     {
+      "name": "MAX_STEP",
+      "type": {
+        "defined": "usize"
+      },
+      "value": "32"
+    },
+    {
       "name": "TOTAL_SUPPLY",
       "type": "u64",
       "value": "1_000_000_000_000_000_000_u64"
-    },
-    {
-      "name": "TOTAL_VIRTUAL_CURVE",
-      "type": "u64",
-      "value": "1_000_000_000_000_000_000_u64"
-    },
-    {
-      "name": "TOTAL_VIRTUAL_RESERVE",
-      "type": "u64",
-      "value": "50_000_000_000_u64"
-    },
-    {
-      "name": "TARGET_RESERVE",
-      "type": "u64",
-      "value": "50_000_000_000_u64"
     }
   ],
   "instructions": [
@@ -854,7 +905,26 @@ export const IDL: Curve = {
           "isSigner": false
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "ranges",
+          "type": {
+            "array": [
+              "u64",
+              32
+            ]
+          }
+        },
+        {
+          "name": "prices",
+          "type": {
+            "array": [
+              "u64",
+              32
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "createToken",
@@ -901,6 +971,11 @@ export const IDL: Curve = {
         },
         {
           "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "tokenMetadataProgram",
           "isMut": false,
           "isSigner": false
         }
@@ -1063,6 +1138,10 @@ export const IDL: Curve = {
         {
           "name": "amount",
           "type": "u64"
+        },
+        {
+          "name": "maxReserve",
+          "type": "u64"
         }
       ]
     },
@@ -1158,6 +1237,10 @@ export const IDL: Curve = {
         {
           "name": "amount",
           "type": "u64"
+        },
+        {
+          "name": "minReserve",
+          "type": "u64"
         }
       ]
     },
@@ -1234,19 +1317,11 @@ export const IDL: Curve = {
             "type": "bool"
           },
           {
-            "name": "totalVirtualCurve",
+            "name": "supplied",
             "type": "u64"
           },
           {
-            "name": "totalVirtualReserve",
-            "type": "u64"
-          },
-          {
-            "name": "totalCurve",
-            "type": "u64"
-          },
-          {
-            "name": "totalReserve",
+            "name": "reserve",
             "type": "u64"
           },
           {
@@ -1280,6 +1355,24 @@ export const IDL: Curve = {
           {
             "name": "systemFee",
             "type": "u64"
+          },
+          {
+            "name": "ranges",
+            "type": {
+              "array": [
+                "u64",
+                32
+              ]
+            }
+          },
+          {
+            "name": "prices",
+            "type": {
+              "array": [
+                "u64",
+                32
+              ]
+            }
           },
           {
             "name": "bump",
@@ -1382,6 +1475,16 @@ export const IDL: Curve = {
           "name": "reserve",
           "type": "u64",
           "index": false
+        },
+        {
+          "name": "totalSupply",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "totalReserve",
+          "type": "u64",
+          "index": false
         }
       ]
     },
@@ -1410,6 +1513,16 @@ export const IDL: Curve = {
         },
         {
           "name": "reserve",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "totalSupply",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "totalReserve",
           "type": "u64",
           "index": false
         }
@@ -1496,6 +1609,11 @@ export const IDL: Curve = {
       "code": 6015,
       "name": "Completed",
       "msg": "Bonding Curve Completed"
+    },
+    {
+      "code": 6016,
+      "name": "OverSlippage",
+      "msg": "Over Slippage"
     }
   ]
 };

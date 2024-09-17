@@ -14,6 +14,9 @@ export class TokenEntity extends BaseEntity {
     @Column({ default: false })
     activated: boolean;
 
+    @Column({ default: false })
+    completed: boolean;
+
     @Column()
     name: string;
 
@@ -23,14 +26,39 @@ export class TokenEntity extends BaseEntity {
     @Column()
     uri: string;
 
-    @Column({ nullable: true })
+    @Column()
     icon: string;
 
-    @Column({ nullable: true })
+    @Column()
     banner: string;
 
-    @Column({ nullable: true })
+    @Column()
     desc: string;
+
+    @Column()
+    supplied: string;
+
+    @Column()
+    reserve: string;
+
+    @Column({ type: 'decimal' })
+    parsedSupplied: number;
+
+    @Column({ type: 'decimal' })
+    parsedReserve: number;
+
+    @Column({ type: 'simple-json', default: {} })
+    tokenomics: {
+        name1?: string;
+        ratio1?: number;
+        recipient1?: string;
+        name2?: string;
+        ratio2?: number;
+        recipient2?: string;
+        name3?: string;
+        ratio3?: number;
+        recipient3?: string;
+    };
 
     @Column({ type: 'simple-json', default: {} })
     link: {

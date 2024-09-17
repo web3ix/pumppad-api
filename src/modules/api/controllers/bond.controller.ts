@@ -34,13 +34,12 @@ export class BondController {
         @UploadedFiles()
         files: {
             icon: Express.Multer.File[];
-            banner?: Express.Multer.File[];
+            banner: Express.Multer.File[];
         },
-        // TODO tokenomics
-
         @Body('symbol') symbol: string,
         @Body('name') name: string,
         @Body('description') description: string,
+        @Body('tokenomics') tokenomics?: string,
         @Body('link') link?: string,
     ) {
         return this.bondService.uploadMetadata({
@@ -49,23 +48,43 @@ export class BondController {
             symbol,
             name,
             description,
+            tokenomics,
             link,
         });
     }
 
-    @Get('/stats')
+    @Get('/top-tokens')
     getStats() {
-        return this.bondService.getStats();
+        return this.bondService.getTopTokens();
+    }
+
+    @Get('/king-of-hill')
+    getKingOfHill() {
+        return this.bondService.getKingOfHill();
     }
 
     @Get('/tokens')
     getTokens(
-        @Query('take') take?: number | undefined,
-        @Query('skip') skip?: number | undefined,
+        @Query('take') take?: number,
+        @Query('skip') skip?: number,
+        @Query('type') type?: string,
+        @Query('owner') owner?: string,
+        @Query('age') age?: number,
+        @Query('minProgress') minProgress?: number,
+        @Query('maxProgress') maxProgress?: number,
+        @Query('search') search?: number,
     ) {
-        const _take = take ?? 10;
-        const _skip = skip ?? 0;
-        return this.bondService.getTokens(_take, _skip);
+        const _take = !isNaN(take) ? take : 10;
+        const _skip = !isNaN(skip) ? skip : 0;
+        return this.bondService.getTokens(
+            _take,
+            _skip,
+            type,
+            age,
+            minProgress,
+            maxProgress,
+            owner,
+        );
     }
 
     @Get('/tokens/:token')
