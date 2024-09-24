@@ -96,16 +96,6 @@ export class BondController {
         return this.bondService.getToken(token);
     }
 
-    @Post('/tokens/:token/comments')
-    addComment(
-        @Param('token') token: string,
-        @Body('user') user: string,
-        @Body('content') content: string,
-        @Body('signature') signature: string,
-    ) {
-        return this.bondService.addComment(token, user, content, signature);
-    }
-
     @Post('/tokens/:token')
     @UseInterceptors(
         FileFieldsInterceptor([
@@ -132,5 +122,15 @@ export class BondController {
             description,
             link,
         });
+    }
+
+    @Post('/tokens/:token/comments')
+    addComment(
+        @Param('token') token: string,
+        @Body('user') user: string,
+        @Body('content') content: string,
+        @Body('signature') signature: string,
+    ) {
+        return this.bondService.addComment(token, user, content, signature);
     }
 }

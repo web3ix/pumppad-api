@@ -332,7 +332,7 @@ export class BondService {
         if (dto.user) builder.andWhere('trade.id IS NOT NULL');
         if (dto.search)
             builder.andWhere(
-                'LOWER(token.symbol) LIKE LOWER(:search) OR LOWER(token.token) = LOWER(:search)',
+                'LOWER(token.symbol) LIKE LOWER(:search) OR LOWER(token.token) LIKE LOWER(:search)',
                 {
                     search: `%${dto.search}%`,
                     token: dto.search,
