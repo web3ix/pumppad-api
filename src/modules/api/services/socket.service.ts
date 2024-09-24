@@ -61,6 +61,22 @@ export class SocketService implements OnGatewayConnection, OnGatewayDisconnect {
         });
     }
 
+    async emitComment(
+        id: string,
+        token: string,
+        address: string,
+        text: string,
+        timestamp: number,
+    ) {
+        this.server.emit('new-comment', {
+            id,
+            token,
+            address,
+            text,
+            timestamp,
+        });
+    }
+
     async emitNewTrade(
         id: string,
         signature: string,

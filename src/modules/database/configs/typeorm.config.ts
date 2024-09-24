@@ -12,6 +12,7 @@ import {
 import { InitDB1726551687048 } from '../migrations/1726551687048-InitDB';
 import { SeedDB1726551701922 } from '../migrations/1726551701922-SeedDB';
 import { AddTokennomics1726552602299 } from '../migrations/1726552602299-AddTokennomics';
+import { AddCommentTimestamp1726853234485 } from '../migrations/1726853234485-AddCommentTimestamp';
 
 config();
 
@@ -30,6 +31,7 @@ const migrations = [
     InitDB1726551687048,
     SeedDB1726551701922,
     AddTokennomics1726552602299,
+    AddCommentTimestamp1726853234485,
 ];
 
 export const dbConfig = {

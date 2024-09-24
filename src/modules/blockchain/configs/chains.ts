@@ -26,7 +26,7 @@ export const CHAINS: Record<
         name: 'Solana Devnet',
         rpcUrls: [
             'https://api.devnet.solana.com',
-            'https://devnet.helius-rpc.com/?api-key=34cc68f2-d9f1-4e98-b53d-a2eb38105377',
+            // 'https://devnet.helius-rpc.com/?api-key=34cc68f2-d9f1-4e98-b53d-a2eb38105377',
         ],
     },
 };

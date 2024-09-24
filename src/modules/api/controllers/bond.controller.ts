@@ -17,6 +17,9 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import { BondService } from '../services';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import { GetTokensDto } from '../dto/get-tokens.dto';
+import { GetMyTokensDto } from '../dto/get-my-tokens';
+import { GetPortfolioTokensDto } from '../dto/get-portfolio-tokens';
 
 @ApiTags('Bond')
 @Controller('/bond')
@@ -68,32 +71,66 @@ export class BondController {
         return this.bondService.getRecentTrades();
     }
 
+    // @Get('/recent-trades')
+    // getRecentTrade() {
+    //     return this.bondService.getRecentTrades();
+    // }
+
     @Get('/tokens')
-    getTokens(
-        @Query('take') take?: number,
-        @Query('skip') skip?: number,
-        @Query('type') type?: string,
-        @Query('owner') owner?: string,
-        @Query('age') age?: number,
-        @Query('minProgress') minProgress?: number,
-        @Query('maxProgress') maxProgress?: number,
-        @Query('search') search?: number,
-    ) {
-        const _take = !isNaN(take) ? take : 10;
-        const _skip = !isNaN(skip) ? skip : 0;
-        return this.bondService.getTokens(
-            _take,
-            _skip,
-            type,
-            age,
-            minProgress,
-            maxProgress,
-            owner,
-        );
+    getTokens(@Query() dto: GetTokensDto) {
+        return this.bondService.getTokens(dto);
+    }
+
+    @Get('/my-tokens')
+    getMyTokens(@Query() dto: GetMyTokensDto) {
+        return this.bondService.getMyTokens(dto);
+    }
+
+    @Get('/portfolio-tokens')
+    getPortfolio(@Query() dto: GetPortfolioTokensDto) {
+        return this.bondService.getPortfolioTokens(dto);
     }
 
     @Get('/tokens/:token')
     getToken(@Param('token') token: string) {
         return this.bondService.getToken(token);
+    }
+
+    @Post('/tokens/:token/comments')
+    addComment(
+        @Param('token') token: string,
+        @Body('user') user: string,
+        @Body('content') content: string,
+        @Body('signature') signature: string,
+    ) {
+        return this.bondService.addComment(token, user, content, signature);
+    }
+
+    @Post('/tokens/:token')
+    @UseInterceptors(
+        FileFieldsInterceptor([
+            { name: 'icon', maxCount: 1 },
+            { name: 'banner', maxCount: 1 },
+        ]),
+    )
+    updateToken(
+        @Param('token') token: string,
+        @UploadedFiles()
+        files: {
+            icon?: Express.Multer.File[];
+            banner?: Express.Multer.File[];
+        },
+        @Body('signature') signature: string,
+        @Body('description') description?: string,
+        @Body('link') link?: string,
+    ) {
+        return this.bondService.updateMetadata({
+            token,
+            signature,
+            icon: files?.icon?.[0],
+            banner: files?.banner?.[0],
+            description,
+            link,
+        });
     }
 }

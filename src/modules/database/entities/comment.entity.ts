@@ -13,4 +13,7 @@ export class CommentEntity extends BaseEntity {
 
     @Column()
     text: string;
+
+    @Column()
+    timestamp: number;
 }

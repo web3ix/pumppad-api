@@ -82,17 +82,19 @@ export class S3Service {
     }
 
     async uploadSingleJSON({
+        key,
         obj,
         isPublic = true,
     }: {
+        key?: string;
         obj: any;
         isPublic?: boolean;
     }) {
         try {
-            const key = `${uuidv4()}`;
+            let _key = key ?? `${uuidv4()}`;
             const command = new PutObjectCommand({
                 Bucket: this.bucketName,
-                Key: key,
+                Key: _key,
                 Body: JSON.stringify(obj),
                 ContentType: 'application/json; charset=utf-8',
                 ACL: isPublic ? 'public-read' : 'private',
@@ -102,9 +104,9 @@ export class S3Service {
 
             return {
                 url: isPublic
-                    ? (await this.getFileUrl(key)).url
-                    : (await this.getPresignedSignedUrl(key)).url,
-                key,
+                    ? (await this.getFileUrl(_key)).url
+                    : (await this.getPresignedSignedUrl(_key)).url,
+                key: _key,
                 isPublic,
             };
         } catch (error) {

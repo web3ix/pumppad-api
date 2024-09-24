@@ -1,6 +1,10 @@
 import { EvmService } from '@/blockchain/services';
-import { TradeEntity, TokenEntity } from '@/database/entities';
-import { TradeRepository, TokenRepository } from '@/database/repositories';
+import { TradeEntity, TokenEntity, CommentEntity } from '@/database/entities';
+import {
+    TradeRepository,
+    TokenRepository,
+    CommentRepository,
+} from '@/database/repositories';
 import { PumpAbi } from '@/shared/blockchain/abis';
 import {
     BadRequestException,
@@ -13,6 +17,12 @@ import { BigNumber, ethers } from 'ethers';
 import { SocketService } from './socket.service';
 import { Between, LessThan } from 'typeorm';
 import { S3Service } from './s3.service';
+import base58 from 'bs58';
+import nacl from 'tweetnacl';
+import { EGetTokenSortBy, GetTokensDto } from '../dto/get-tokens.dto';
+import { retry } from 'rxjs';
+import { GetMyTokensDto } from '../dto/get-my-tokens';
+import { GetPortfolioTokensDto } from '../dto/get-portfolio-tokens';
 
 const PRECISION = BigNumber.from('1000000000000000000');
 
@@ -27,6 +37,9 @@ export class BondService {
 
         @Inject(TradeRepository)
         private tradeRepo: TradeRepository,
+
+        @Inject(CommentRepository)
+        private commentRepo: CommentRepository,
 
         private readonly socketClient: SocketService,
 
@@ -259,125 +272,171 @@ export class BondService {
         );
     }
 
-    async getTokens(
-        take: number = 10,
-        skip: number = 0,
-        type?: string,
-        age?: number,
-        minProgress?: number,
-        maxProgress?: number,
-        owner?: string,
-    ) {
-        return this.tokenRepo.find({
-            where: owner
-                ? {
-                      creator: owner,
-                      activated: true,
-                  }
-                : {
-                      activated: true,
-                  },
-            order: {
-                updatedAt: 'DESC',
-            },
-            select: [
-                'id',
-                'token',
-                'creator',
-                'name',
-                'symbol',
-                'uri',
-                'icon',
-                'banner',
-                'desc',
-                'link',
-                'trades',
-                'lastPrice',
-                'timestamp',
-                'supplied',
-                'reserve',
-                'parsedSupplied',
-                'parsedReserve',
-            ],
-            take,
-            skip,
+    async getTokens(dto: GetTokensDto): Promise<{
+        total: number;
+        data: TokenEntity[];
+    }> {
+        const builder = this.tokenRepo.createQueryBuilder('token');
+        if (dto.user) {
+            builder.leftJoinAndSelect(
+                'token.trades',
+                'trade',
+                'trade.timestamp >= :timestamp AND trade.doer = :doer',
+                {
+                    timestamp: Math.floor(Date.now() / 1000) - 86400,
+                    doer: dto.user,
+                },
+            );
+        } else {
+            builder.leftJoinAndSelect(
+                'token.trades',
+                'trade',
+                'trade.timestamp >= :timestamp',
+                {
+                    timestamp: Math.floor(Date.now() / 1000) - 86400,
+                },
+            );
+        }
+
+        builder.select([
+            'token.id as id',
+            'token.token as token',
+            'creator',
+            'name',
+            'symbol',
+            'uri',
+            'icon',
+            'banner',
+            'token.desc as desc',
+            'link',
+            '"lastPrice"',
+            'token.reserve as reserve',
+            'token."parsedReserve" as "parsedReserve"',
+            'token.supplied as supplied',
+            'token."parsedSupplied" as "parsedSupplied"',
+            'token.timestamp as timestamp',
+            'SUM(trade."parseReserveAmount") as volume',
+            'COUNT(trade.id) as "totalTrade"',
+        ]);
+
+        builder.where('token.activated = true');
+        if (dto.user) builder.andWhere('trade.id IS NOT NULL');
+        if (dto.search)
+            builder.andWhere(
+                'LOWER(token.symbol) LIKE LOWER(:search) OR LOWER(token.token) = LOWER(:search)',
+                {
+                    search: `%${dto.search}%`,
+                    token: dto.search,
+                },
+            );
+        if (dto.owner)
+            builder.andWhere('token.creator = :creator', {
+                creator: dto.owner,
+            });
+        builder.addGroupBy('token.id');
+        builder.addGroupBy('token.token');
+        builder.addGroupBy('token.creator');
+        builder.addGroupBy('token.name');
+        builder.addGroupBy('token.symbol');
+        builder.addGroupBy('token.uri');
+        builder.addGroupBy('token.icon');
+        builder.addGroupBy('token.banner');
+        builder.addGroupBy('token.desc');
+        builder.addGroupBy('token.link');
+        builder.addGroupBy('token.lastPrice');
+        builder.addGroupBy('token.timestamp');
+        builder.addGroupBy('token.reserve');
+        builder.addGroupBy('token."parsedReserve"');
+        builder.addGroupBy('token.supplied');
+        builder.addGroupBy('token."parsedSupplied"');
+        builder.addGroupBy('token.symbol');
+        if (dto.sortBy === EGetTokenSortBy.TRENDING) {
+            builder.orderBy('volume', 'DESC', 'NULLS LAST');
+        } else if (dto.sortBy === EGetTokenSortBy.RAISING) {
+            builder.orderBy('"totalTrade"', 'DESC');
+        } else if (dto.sortBy === EGetTokenSortBy.NEW) {
+            builder.orderBy('timestamp', 'DESC');
+        } else if (dto.sortBy === EGetTokenSortBy.TOP) {
+            builder.orderBy('"parsedReserve"', 'DESC');
+        } else if (dto.sortBy === EGetTokenSortBy.FINISHED) {
+            builder.andWhere('token.completed = true');
+        }
+
+        console.log(builder.getQuery());
+
+        builder.limit(dto.take);
+        builder.offset(dto.skip);
+
+        const total = await builder.getCount();
+
+        const tokens = await builder.getRawMany();
+        return {
+            total,
+            data: tokens,
+        };
+    }
+
+    async getMyTokens(dto: GetMyTokensDto): Promise<{
+        total: number;
+        data: TokenEntity[];
+    }> {
+        return this.getTokens({
+            sortBy: EGetTokenSortBy.NEW,
+            owner: dto.owner,
+            take: dto.take,
+            skip: dto.skip,
+        });
+    }
+
+    async getPortfolioTokens(dto: GetPortfolioTokensDto): Promise<{
+        total: number;
+        data: TokenEntity[];
+    }> {
+        return this.getTokens({
+            sortBy: EGetTokenSortBy.NEW,
+            user: dto.user,
+            take: dto.take,
+            skip: dto.skip,
         });
     }
 
     async getTopTokens() {
-        return this.tokenRepo.find({
-            where: {
-                activated: true,
-            },
-            order: {
-                updatedAt: 'DESC',
-                parsedReserve: 'DESC',
-            },
-            select: [
-                'id',
-                'token',
-                'creator',
-                'name',
-                'symbol',
-                'uri',
-                'icon',
-                'banner',
-                'desc',
-                'link',
-                'trades',
-                'lastPrice',
-                'timestamp',
-                'supplied',
-                'reserve',
-                'parsedSupplied',
-                'parsedReserve',
-            ],
-            take: 10,
-            skip: 0,
+        return this.getTokens({
+            sortBy: EGetTokenSortBy.TRENDING,
         });
     }
 
     async getToken(token: string) {
-        try {
-            const tokenEntity = await this.tokenRepo.findOne({
-                where: {
-                    token: new PublicKey(token).toString(),
-                    activated: true,
-                },
-                relations: {
-                    trades: true,
-                },
-                select: [
-                    'id',
-                    'token',
-                    'creator',
-                    'name',
-                    'symbol',
-                    'uri',
-                    'icon',
-                    'banner',
-                    'desc',
-                    'link',
-                    'trades',
-                    'lastPrice',
-                    'timestamp',
-                    'supplied',
-                    'reserve',
-                    'parsedSupplied',
-                    'parsedReserve',
-                ],
-                order: {
-                    trades: {
-                        timestamp: 'DESC',
-                    },
-                },
-            });
-            if (!tokenEntity) throw new NotFoundException();
+        const tokens = await this.getTokens({
+            search: token,
+            take: 1,
+            skip: 0,
+        });
+        if (tokens.total === 0) throw new NotFoundException();
 
-            return tokenEntity;
-        } catch (error) {
-            throw new NotFoundException();
-        }
+        const _token = tokens.data[0];
+
+        const trades = await this.tradeRepo
+            .createQueryBuilder('trade')
+            .where('"tokenId" = :tokenId', { tokenId: _token.id })
+            .orderBy('timestamp', 'DESC')
+            .take(20)
+            .skip(0)
+            .getMany();
+
+        const comments = await this.commentRepo
+            .createQueryBuilder('comment')
+            .where('"tokenId" = :tokenId', { tokenId: _token.id })
+            .orderBy('timestamp', 'DESC')
+            .take(3)
+            .skip(0)
+            .getMany();
+
+        return {
+            ...tokens.data[0],
+            trades,
+            comments,
+        };
     }
 
     async getLatestTrades() {
@@ -399,36 +458,11 @@ export class BondService {
     }
 
     async getKingOfHill() {
-        return this.tokenRepo.findOne({
-            where: {
-                activated: true,
-            },
-            order: {
-                lastPrice: 'DESC',
-            },
-            relations: {
-                trades: true,
-            },
-            select: [
-                'id',
-                'token',
-                'creator',
-                'name',
-                'symbol',
-                'uri',
-                'icon',
-                'banner',
-                'desc',
-                'link',
-                'trades',
-                'lastPrice',
-                'timestamp',
-                'supplied',
-                'reserve',
-                'parsedSupplied',
-                'parsedReserve',
-            ],
-        });
+        return this.getTokens({
+            sortBy: EGetTokenSortBy.TOP,
+            take: 1,
+            skip: 0,
+        }).then((res) => res.data?.[0] ?? null);
     }
 
     async getRecentTrades() {
@@ -454,20 +488,6 @@ export class BondService {
             take: 10,
             skip: 0,
         });
-    }
-
-    async getStats() {
-        const [tokens, trades, kingOfHill] = await Promise.all([
-            this.getTokens(),
-            this.getLatestTrades(),
-            this.getKingOfHill(),
-        ]);
-
-        return {
-            tokens,
-            trades,
-            kingOfHill,
-        };
     }
 
     async getTokenOHCL(
@@ -601,5 +621,134 @@ export class BondService {
             obj: metadata,
         });
         return metadataUrl;
+    }
+
+    async updateMetadata({
+        token,
+        signature,
+        icon,
+        banner,
+        description,
+        link,
+    }: {
+        token: string;
+        signature: string;
+        icon?: Express.Multer.File;
+        banner?: Express.Multer.File;
+        description?: string;
+        link?: string;
+    }) {
+        let _token = await this.tokenRepo.findOne({
+            where: {
+                token,
+            },
+        });
+
+        if (!_token) throw new NotFoundException();
+
+        const encodedMessage = new TextEncoder().encode(token);
+        const signatureBytes = base58.decode(signature);
+        const publicKeyBytes = base58.decode(_token.creator);
+        // Verify the signature
+        const isValid = nacl.sign.detached.verify(
+            encodedMessage,
+            signatureBytes,
+            publicKeyBytes,
+        );
+        if (!isValid) throw new BadRequestException('Only owner can update');
+
+        let metadata: any = {
+            name: _token.name,
+            symbol: _token.symbol,
+            description: _token.desc,
+            image: _token.icon,
+            banner: _token.banner,
+            link: _token.link,
+            tokenomics: _token.tokenomics,
+        };
+
+        if (description) {
+            metadata.description = description;
+            _token.desc = description;
+        }
+
+        if (icon) {
+            const { url: iconUrl } = await this.s3Service.uploadSingleFile({
+                file: icon,
+                isPublic: true,
+            });
+            metadata.image = iconUrl;
+            _token.icon = iconUrl;
+        }
+
+        if (banner) {
+            const { url: bannerUrl } = await this.s3Service.uploadSingleFile({
+                file: banner,
+                isPublic: true,
+            });
+            metadata.banner = bannerUrl;
+            _token.banner = bannerUrl;
+        }
+
+        if (link) {
+            metadata.link = link;
+            _token.link = JSON.parse(link);
+        }
+
+        let key = _token.uri.split('/').slice(-1)[0];
+
+        const { url: metadataUrl } = await this.s3Service.uploadSingleJSON({
+            key,
+            obj: metadata,
+        });
+        _token.uri = metadataUrl;
+
+        await this.tokenRepo.update(
+            {
+                token,
+            },
+            _token,
+        );
+
+        return _token;
+    }
+
+    async addComment(
+        token: string,
+        user: string,
+        content: string,
+        signature: string,
+    ) {
+        const encodedMessage = new TextEncoder().encode(`${content}${token}`);
+        const signatureBytes = base58.decode(signature);
+        const publicKeyBytes = base58.decode(user);
+        // Verify the signature
+        const isValid = nacl.sign.detached.verify(
+            encodedMessage,
+            signatureBytes,
+            publicKeyBytes,
+        );
+        if (!isValid) throw new BadRequestException('Invalid signature');
+
+        const tokenEntity = await this.tokenRepo.findOne({
+            where: { token },
+        });
+        if (!tokenEntity) throw new NotFoundException('No Token');
+
+        const newComment = new CommentEntity();
+        newComment.token = tokenEntity;
+        newComment.address = user;
+        newComment.text = content;
+        newComment.timestamp = Math.floor(Date.now() / 1000);
+
+        await this.socketClient.emitComment(
+            newComment.id,
+            token,
+            newComment.address,
+            newComment.text,
+            newComment.timestamp,
+        );
+
+        return this.commentRepo.save(newComment);
     }
 }
