@@ -98,7 +98,7 @@ export class GetTokensDto {
     @IsOptional()
     @IsNumber()
     @Type(() => Number)
-    minProgress?: EGetTokenAge;
+    minProgress?: number;
 
     @ApiPropertyOptional({
         name: 'maxProgress',
@@ -107,5 +107,5 @@ export class GetTokensDto {
     @IsOptional()
     @IsNumber()
     @Type(() => Number)
-    maxProgress?: EGetTokenAge;
+    maxProgress?: number;
 }

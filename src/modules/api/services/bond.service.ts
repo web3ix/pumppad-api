@@ -19,12 +19,18 @@ import { Between, LessThan } from 'typeorm';
 import { S3Service } from './s3.service';
 import base58 from 'bs58';
 import nacl from 'tweetnacl';
-import { EGetTokenSortBy, GetTokensDto } from '../dto/get-tokens.dto';
+import {
+    EGetTokenAge,
+    EGetTokenSortBy,
+    GetTokensDto,
+} from '../dto/get-tokens.dto';
 import { retry } from 'rxjs';
 import { GetMyTokensDto } from '../dto/get-my-tokens';
 import { GetPortfolioTokensDto } from '../dto/get-portfolio-tokens';
 
 const PRECISION = BigNumber.from('1000000000000000000');
+
+const TARGET_RESERVE = 79.395;
 
 @Injectable()
 export class BondService {
@@ -277,13 +283,16 @@ export class BondService {
         data: TokenEntity[];
     }> {
         const builder = this.tokenRepo.createQueryBuilder('token');
+
+        const currentTimestamp = Math.floor(Date.now() / 1000);
+
         if (dto.user) {
             builder.leftJoinAndSelect(
                 'token.trades',
                 'trade',
                 'trade.timestamp >= :timestamp AND trade.doer = :doer',
                 {
-                    timestamp: Math.floor(Date.now() / 1000) - 86400,
+                    timestamp: currentTimestamp - 86400,
                     doer: dto.user,
                 },
             );
@@ -293,7 +302,7 @@ export class BondService {
                 'trade',
                 'trade.timestamp >= :timestamp',
                 {
-                    timestamp: Math.floor(Date.now() / 1000) - 86400,
+                    timestamp: currentTimestamp - 86400,
                 },
             );
         }
@@ -362,7 +371,35 @@ export class BondService {
             builder.andWhere('token.completed = true');
         }
 
-        console.log(builder.getQuery());
+        if (dto.age === EGetTokenAge.LESS_THAN_1H) {
+            builder.andWhere('token.timestamp >= :time', {
+                time: currentTimestamp - 3600,
+            });
+        } else if (dto.age === EGetTokenAge.LESS_THAN_6h) {
+            builder.andWhere('token.timestamp >= :time', {
+                time: currentTimestamp - 21600,
+            });
+        } else if (dto.age === EGetTokenAge.LESS_THAN_1D) {
+            builder.andWhere('token.timestamp >= :time', {
+                time: currentTimestamp - 86400,
+            });
+        } else if (dto.age === EGetTokenAge.LESS_THAN_1W) {
+            builder.andWhere('token.timestamp >= :time', {
+                time: currentTimestamp - 604800,
+            });
+        }
+
+        if (dto.minProgress) {
+            builder.andWhere('token."parsedReserve" >= :reserve', {
+                reserve: TARGET_RESERVE * +dto.minProgress,
+            });
+        }
+
+        if (dto.maxProgress) {
+            builder.andWhere('token."parsedReserve" <= :reserve', {
+                reserve: TARGET_RESERVE * +dto.maxProgress,
+            });
+        }
 
         builder.limit(dto.take);
         builder.offset(dto.skip);
