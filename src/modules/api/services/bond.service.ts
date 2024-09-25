@@ -662,14 +662,14 @@ export class BondService {
 
     async updateMetadata({
         token,
-        signature,
+        // signature,
         icon,
         banner,
         description,
         link,
     }: {
         token: string;
-        signature: string;
+        // signature: string;
         icon?: Express.Multer.File;
         banner?: Express.Multer.File;
         description?: string;
@@ -683,16 +683,16 @@ export class BondService {
 
         if (!_token) throw new NotFoundException();
 
-        const encodedMessage = new TextEncoder().encode(token);
-        const signatureBytes = base58.decode(signature);
-        const publicKeyBytes = base58.decode(_token.creator);
-        // Verify the signature
-        const isValid = nacl.sign.detached.verify(
-            encodedMessage,
-            signatureBytes,
-            publicKeyBytes,
-        );
-        if (!isValid) throw new BadRequestException('Only owner can update');
+        // const encodedMessage = new TextEncoder().encode(token);
+        // const signatureBytes = base58.decode(signature);
+        // const publicKeyBytes = base58.decode(_token.creator);
+        // // Verify the signature
+        // const isValid = nacl.sign.detached.verify(
+        //     encodedMessage,
+        //     signatureBytes,
+        //     publicKeyBytes,
+        // );
+        // if (!isValid) throw new BadRequestException('Only owner can update');
 
         let metadata: any = {
             name: _token.name,
@@ -754,18 +754,18 @@ export class BondService {
         token: string,
         user: string,
         content: string,
-        signature: string,
+        // signature: string,
     ) {
-        const encodedMessage = new TextEncoder().encode(`${content}${token}`);
-        const signatureBytes = base58.decode(signature);
-        const publicKeyBytes = base58.decode(user);
-        // Verify the signature
-        const isValid = nacl.sign.detached.verify(
-            encodedMessage,
-            signatureBytes,
-            publicKeyBytes,
-        );
-        if (!isValid) throw new BadRequestException('Invalid signature');
+        // const encodedMessage = new TextEncoder().encode(`${content}${token}`);
+        // const signatureBytes = base58.decode(signature);
+        // const publicKeyBytes = base58.decode(user);
+        // // Verify the signature
+        // const isValid = nacl.sign.detached.verify(
+        //     encodedMessage,
+        //     signatureBytes,
+        //     publicKeyBytes,
+        // );
+        // if (!isValid) throw new BadRequestException('Invalid signature');
 
         const tokenEntity = await this.tokenRepo.findOne({
             where: { token },

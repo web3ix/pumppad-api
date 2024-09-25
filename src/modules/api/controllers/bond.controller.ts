@@ -110,13 +110,13 @@ export class BondController {
             icon?: Express.Multer.File[];
             banner?: Express.Multer.File[];
         },
-        @Body('signature') signature: string,
+        // @Body('signature') signature: string,
         @Body('description') description?: string,
         @Body('link') link?: string,
     ) {
         return this.bondService.updateMetadata({
             token,
-            signature,
+            // signature,
             icon: files?.icon?.[0],
             banner: files?.banner?.[0],
             description,
@@ -129,8 +129,8 @@ export class BondController {
         @Param('token') token: string,
         @Body('user') user: string,
         @Body('content') content: string,
-        @Body('signature') signature: string,
+        // @Body('signature') signature: string,
     ) {
-        return this.bondService.addComment(token, user, content, signature);
+        return this.bondService.addComment(token, user, content);
     }
 }
