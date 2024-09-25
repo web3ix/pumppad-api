@@ -366,7 +366,7 @@ export class BondService {
         } else if (dto.sortBy === EGetTokenSortBy.NEW) {
             builder.orderBy('timestamp', 'DESC');
         } else if (dto.sortBy === EGetTokenSortBy.TOP) {
-            builder.orderBy('"parsedReserve"', 'DESC');
+            builder.orderBy('"lastPrice"', 'DESC');
         } else if (dto.sortBy === EGetTokenSortBy.FINISHED) {
             builder.andWhere('token.completed = true');
         }
