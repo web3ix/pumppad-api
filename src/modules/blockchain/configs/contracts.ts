@@ -2,12 +2,7 @@ import { CHAIN_ID } from './chains';
 
 export const CONTRACTS: Record<CHAIN_ID, any> = {
     [CHAIN_ID.SOLANA_MAINNET]: {},
-    [CHAIN_ID.SOLANA_DEVNET]: {
-        PUMP: {
-            deployedSignature:
-                '51Hcc6UxPNpVXdk7mcMMimMKjSpHWjgKpPRJFtfA8NZTATUyfJW21dVzJHAD1aVoympbeVPCzJrCoAN1ahUnL2tm',
-        },
-    },
+    [CHAIN_ID.SOLANA_DEVNET]: {},
 };
 
 export const CHUNK_BLOCK_NUMBER: Record<CHAIN_ID, number> = {

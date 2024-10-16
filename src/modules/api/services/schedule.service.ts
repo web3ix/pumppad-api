@@ -1,23 +1,12 @@
-import {
-    CHAINS,
-    CHAIN_ID,
-    CHUNK_BLOCK_NUMBER,
-    CONTRACTS,
-    PUMP_TOPIC,
-    randomRPC,
-} from '@/blockchain/configs';
+import { CHAINS, CHAIN_ID, randomRPC } from '@/blockchain/configs';
 import { EvmService } from '@/blockchain/services';
 import { NetworkConfigRepository } from '@/database/repositories';
 import { CONFIG_KEYS } from '@/shared/constants';
-import { formattedHexString } from '@/shared/utils';
 import { InjectQueue } from '@nestjs/bull';
 import { Inject, Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { Queue } from 'bull';
-import { ethers } from 'ethers';
-import * as anchor from '@project-serum/anchor';
-import { BorshCoder, EventParser } from '@project-serum/anchor';
 import { Connection, PublicKey } from '@solana/web3.js';
+import { Queue } from 'bull';
 import { PROGRAM_ID } from './sdk/constants';
 
 @Injectable()
@@ -29,8 +18,6 @@ export class ScheduleService {
 
     constructor(
         @InjectQueue('QUEUE') private readonly queue: Queue,
-
-        private readonly evmService: EvmService,
 
         @Inject(NetworkConfigRepository)
         private networkConfigRepo: NetworkConfigRepository,
@@ -73,13 +60,24 @@ export class ScheduleService {
             );
 
             const currentFromSignature = config.data.startSignature;
-            let transactionList = await connection.getSignaturesForAddress(
-                PROGRAM_ID,
-                {
-                    limit: 1000,
+            let payload: any = {
+                limit: 1000,
+            };
+            if (!currentFromSignature) {
+                payload = {
+                    ...payload,
                     until: currentFromSignature,
+                };
+            }
+            let transactionList = await connection.getSignaturesForAddress(
+                process.env.CURVE_PROGRAM_ID
+                    ? new PublicKey(process.env.CURVE_PROGRAM_ID)
+                    : PROGRAM_ID,
+                {
+                    ...payload,
                 },
             );
+
             if (!transactionList.length) return;
 
             let signatures = transactionList.map(

@@ -20,6 +20,7 @@ import { AUTHORITY, PROGRAM_ID } from "./constants";
 import { CurveEventHandlers, CurveEventType } from "./types";
 import { checkOrCreateAssociatedTokenAccount } from "./utils";
 import {
+	createCloseAccountInstruction,
 	createSyncNativeInstruction,
 	getAssociatedTokenAddress,
 } from "@solana/spl-token";
@@ -40,7 +41,7 @@ export default class CurveSdk {
 	public WEI6 = new BN("1000000");
 	public MULTI_FACTOR = new BN("1000000000");
 	public MAX_SUPPLY = new BN(TOTAL_SALE).mul(this.MULTI_FACTOR);
-	public MAX_STEP = 32;
+	public MAX_STEP = 30;
 
 	constructor(connection: Connection, programId: PublicKey = PROGRAM_ID) {
 		this.connection = connection;
@@ -247,10 +248,7 @@ export default class CurveSdk {
 		}
 
 		let newSupply = amount.add(currentSupply);
-		console.log(
-			"🚀 ~ file: Curve.ts:263 ~ CurveSdk ~ amount:",
-			amount.toString()
-		);
+
 		if (newSupply.gt(this.MAX_SUPPLY)) throw new Error("Exceed Max Supply");
 
 		// tokensLeft > 0 -> can never happen
@@ -427,6 +425,23 @@ export default class CurveSdk {
 		return amount;
 	}
 
+	getTokenPda(symbol: string): PublicKey {
+		return getMintAccountPubKey(this.program, this.configAccountPubKey, symbol);
+	}
+
+	async checkTokenExist(symbol: string) {
+		const mintPubkey = getMintAccountPubKey(
+			this.program,
+			this.configAccountPubKey,
+			symbol
+		);
+
+		const mintInfo = await this.connection.getParsedAccountInfo(mintPubkey);
+		if (mintInfo.value) {
+			throw Error("Exists token with symbol");
+		}
+	}
+
 	async initialize(
 		signer: PublicKey,
 		feeWallet: PublicKey,
@@ -505,21 +520,41 @@ export default class CurveSdk {
 		};
 	}
 
-	getTokenPda(symbol: string): PublicKey {
-		return getMintAccountPubKey(this.program, this.configAccountPubKey, symbol);
+	async setFeeWallet(
+		feeWallet: PublicKey,
+		feeWallet2: PublicKey,
+		feeWallet3: PublicKey
+	): Promise<Transaction> {
+		return this.program.methods
+			.setFeeWallet()
+			.accounts({
+				configAccount: this.configAccountPubKey,
+				authority: this.configAccountData.authority,
+				feeWallet: feeWallet,
+				feeWallet2: feeWallet2,
+				feeWallet3: feeWallet3,
+			})
+			.transaction();
 	}
 
-	async checkTokenExist(symbol: string) {
-		const mintPubkey = getMintAccountPubKey(
-			this.program,
-			this.configAccountPubKey,
-			symbol
-		);
+	async setMinFee(minFee: BN): Promise<Transaction> {
+		return this.program.methods
+			.setMinFee(minFee)
+			.accounts({
+				configAccount: this.configAccountPubKey,
+				authority: this.configAccountData.authority,
+			})
+			.transaction();
+	}
 
-		const mintInfo = await this.connection.getParsedAccountInfo(mintPubkey);
-		if (mintInfo.value) {
-			throw Error("Exists token with symbol");
-		}
+	async setSystemFee(systemFee: BN): Promise<Transaction> {
+		return this.program.methods
+			.setSystemFee(systemFee)
+			.accounts({
+				configAccount: this.configAccountPubKey,
+				authority: this.configAccountData.authority,
+			})
+			.transaction();
 	}
 
 	async _createToken(
@@ -823,7 +858,7 @@ export default class CurveSdk {
 
 		const [
 			sellerAta,
-			sellerReserveTokenAta,
+			{ ata: sellerReserveTokenAta, tx: createSellerReserveAtaTx },
 			feeWalletReserveTokenAta,
 			feeWalletReserveTokenAta2,
 			feeWalletReserveTokenAta3,
@@ -832,11 +867,11 @@ export default class CurveSdk {
 				mint: mint,
 				owner: seller,
 			}),
-			getAssociatedTokenAddress(
-				this.configAccountData.reserveToken,
+			checkOrCreateAssociatedTokenAccount(
+				this.connection,
 				seller,
-				false,
-				reserveTokenInfo.value.owner
+				seller,
+				this.configAccountData.reserveToken
 			),
 			getAssociatedTokenAddress(
 				this.configAccountData.reserveToken,
@@ -858,7 +893,11 @@ export default class CurveSdk {
 			),
 		]);
 
-		return this.program.methods
+		const tx = new Transaction();
+
+		if (createSellerReserveAtaTx) tx.add(createSellerReserveAtaTx);
+
+		const sellTx = await this.program.methods
 			.sellToken(symbol, amount, minReserveAmount)
 			.accounts({
 				sellerTokenAccount: sellerAta,
@@ -881,25 +920,37 @@ export default class CurveSdk {
 				systemProgram: web3.SystemProgram.programId,
 			})
 			.transaction();
+
+		tx.add(sellTx);
+
+		// check and wrap sol to wsol
+		if (this.configAccountData.reserveToken.equals(WSOL)) {
+			tx.add(
+				createCloseAccountInstruction(sellerReserveTokenAta, seller, seller)
+			);
+		}
+
+		return tx;
 	}
 
-	async addLp(symbol: string): Promise<Transaction> {
+	async addLP(symbol: string): Promise<Transaction> {
 		const mint = getMintAccountPubKey(
 			this.program,
 			this.configAccountPubKey,
 			symbol
 		);
 
-		const mintInfo = await this.connection.getParsedAccountInfo(mint);
+		const [mintInfo, reserveTokenInfo] = await Promise.all([
+			this.connection.getParsedAccountInfo(mint),
+			this.connection.getParsedAccountInfo(this.configAccountData.reserveToken),
+		]);
 
 		if (!mintInfo.value) {
 			throw Error("Token doesn't exists with symbol");
 		}
-
-		const authorityAta = await anchor.utils.token.associatedAddress({
-			mint: mint,
-			owner: this.configAccountData.authority,
-		});
+		if (!reserveTokenInfo.value) {
+			throw Error("Invalid reserve token");
+		}
 
 		const vaultTokenPda = getVaultTokenAccountPubKey(
 			this.program,
@@ -913,78 +964,54 @@ export default class CurveSdk {
 			mint
 		);
 
-		return this.program.methods
+		const vaultReserveTokenPubkey = getVaultReserveAccountPubKey(
+			this.program,
+			this.configAccountPubKey,
+			this.configAccountData.reserveToken
+		);
+
+		const [
+			authorityAta,
+			{ ata: authorityReserveTokenAta, tx: createAuthorityReserveAtaTx },
+		] = await Promise.all([
+			anchor.utils.token.associatedAddress({
+				mint: mint,
+				owner: this.configAccountData.authority,
+			}),
+			checkOrCreateAssociatedTokenAccount(
+				this.connection,
+				this.configAccountData.authority,
+				this.configAccountData.authority,
+				this.configAccountData.reserveToken
+			),
+		]);
+
+		const tx = new Transaction();
+
+		if (createAuthorityReserveAtaTx) tx.add(createAuthorityReserveAtaTx);
+
+		const addLpTx = await this.program.methods
 			.addLp(symbol)
 			.accounts({
 				authorityTokenAccount: authorityAta,
 				vaultTokenAccount: vaultTokenPda,
 				bondAccount: bondPda,
 				configAccount: this.configAccountPubKey,
+				authorityReserveTokenAccount: authorityReserveTokenAta,
+				vaultReserveTokenAccount: vaultReserveTokenPubkey,
+				reserveToken: this.configAccountData.reserveToken,
 				mint,
 				authority: this.configAccountData.authority,
-				tokenProgram: mintInfo.value.owner,
+				tokenProgram: mintInfo.value!.owner,
+				reserveTokenProgram: reserveTokenInfo.value.owner,
 				associatedTokenProgram: anchor.utils.token.ASSOCIATED_PROGRAM_ID,
 				rent: anchor.web3.SYSVAR_RENT_PUBKEY,
 				systemProgram: web3.SystemProgram.programId,
 			})
 			.transaction();
-	}
 
-	// listen events
-	addEventListener<T extends CurveEventType>(
-		eventType: T,
-		callback: (
-			event: CurveEventHandlers[T],
-			slot: number,
-			signature: string
-		) => void
-	) {
-		return this.program.addEventListener(
-			eventType,
-			(event: any, slot: number, signature: string) => {
-				let processedEvent;
-				switch (eventType) {
-					// case "createEvent":
-					// 	processedEvent = toCreateEvent(event as CreateEvent);
-					// 	callback(
-					// 		processedEvent as PumpFunEventHandlers[T],
-					// 		slot,
-					// 		signature
-					// 	);
-					// 	break;
-					// case "tradeEvent":
-					// 	processedEvent = toTradeEvent(event as TradeEvent);
-					// 	callback(
-					// 		processedEvent as PumpFunEventHandlers[T],
-					// 		slot,
-					// 		signature
-					// 	);
-					// 	break;
-					// case "completeEvent":
-					// 	processedEvent = toCompleteEvent(event as CompleteEvent);
-					// 	callback(
-					// 		processedEvent as PumpFunEventHandlers[T],
-					// 		slot,
-					// 		signature
-					// 	);
-					// 	console.log("completeEvent", event, slot, signature);
-					// 	break;
-					// case "setParamsEvent":
-					// 	processedEvent = toSetParamsEvent(event as SetParamsEvent);
-					// 	callback(
-					// 		processedEvent as PumpFunEventHandlers[T],
-					// 		slot,
-					// 		signature
-					// 	);
-					// 	break;
-					default:
-						console.error("Unhandled event type:", eventType);
-				}
-			}
-		);
-	}
+		tx.add(addLpTx);
 
-	removeEventListener(eventId: number) {
-		this.program.removeEventListener(eventId);
+		return tx;
 	}
 }

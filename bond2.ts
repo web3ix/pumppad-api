@@ -426,7 +426,7 @@ export function generateTableData(steps: { x: bigint; y: bigint }[]) {
 const maxSupply = 6_700_000_000;
 const finalMintingPrice = 0.0000004;
 const initialMintingPrice = 0.000000013;
-const stepCount = 32;
+const stepCount = 30;
 
 const genData = generateCreateArgs({
     name: 'abc',

@@ -2,7 +2,7 @@ import { CHAINS, CHAIN_ID, randomRPC } from '@/blockchain/configs';
 import { Process, Processor } from '@nestjs/bull';
 import { Inject } from '@nestjs/common';
 import { BorshCoder, EventParser } from '@project-serum/anchor';
-import { Connection } from '@solana/web3.js';
+import { Connection, PublicKey } from '@solana/web3.js';
 import { Job } from 'bull';
 import { BondService } from './bond.service';
 import CurveSdk from './sdk/Curve';
@@ -33,7 +33,9 @@ export class ConsumerService {
                 });
 
                 const eventParser = new EventParser(
-                    sdk.program.programId,
+                    process.env.CURVE_PROGRAM_ID
+                        ? new PublicKey(process.env.CURVE_PROGRAM_ID)
+                        : sdk.program.programId,
                     new BorshCoder(sdk.program.idl),
                 );
                 const events = eventParser.parseLogs(tx.meta.logMessages);

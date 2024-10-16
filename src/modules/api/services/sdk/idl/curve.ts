@@ -47,12 +47,17 @@ export type Curve = {
       "type": {
         "defined": "usize"
       },
-      "value": "32"
+      "value": "30"
     },
     {
       "name": "TOTAL_SUPPLY",
       "type": "u64",
       "value": "1_000_000_000_000_000_000_u64"
+    },
+    {
+      "name": "TOTAL_SALE",
+      "type": "u64",
+      "value": "670_000_000_000_000_000_u64"
     }
   ],
   "instructions": [
@@ -111,7 +116,7 @@ export type Curve = {
           "type": {
             "array": [
               "u64",
-              32
+              30
             ]
           }
         },
@@ -120,9 +125,97 @@ export type Curve = {
           "type": {
             "array": [
               "u64",
-              32
+              30
             ]
           }
+        }
+      ]
+    },
+    {
+      "name": "setFeeWallet",
+      "accounts": [
+        {
+          "name": "configAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "feeWallet",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "feeWallet2",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "feeWallet3",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "setMinFee",
+      "accounts": [
+        {
+          "name": "configAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "minFee",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "setSystemFee",
+      "accounts": [
+        {
+          "name": "configAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "systemFee",
+          "type": "u64"
         }
       ]
     },
@@ -473,7 +566,17 @@ export type Curve = {
           "isSigner": false
         },
         {
+          "name": "authorityReserveTokenAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
           "name": "vaultTokenAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "vaultReserveTokenAccount",
           "isMut": true,
           "isSigner": false
         },
@@ -485,6 +588,11 @@ export type Curve = {
         {
           "name": "configAccount",
           "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "reserveToken",
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -509,6 +617,11 @@ export type Curve = {
         },
         {
           "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "reserveTokenProgram",
           "isMut": false,
           "isSigner": false
         },
@@ -581,6 +694,14 @@ export type Curve = {
             "type": "publicKey"
           },
           {
+            "name": "minFee",
+            "type": "u64"
+          },
+          {
+            "name": "accFee",
+            "type": "u64"
+          },
+          {
             "name": "systemFee",
             "type": "u64"
           },
@@ -589,7 +710,7 @@ export type Curve = {
             "type": {
               "array": [
                 "u64",
-                32
+                30
               ]
             }
           },
@@ -598,7 +719,7 @@ export type Curve = {
             "type": {
               "array": [
                 "u64",
-                32
+                30
               ]
             }
           },
@@ -611,21 +732,6 @@ export type Curve = {
     }
   ],
   "events": [
-    {
-      "name": "InitializedEvent",
-      "fields": [
-        {
-          "name": "authority",
-          "type": "publicKey",
-          "index": false
-        },
-        {
-          "name": "feeWallet",
-          "type": "publicKey",
-          "index": false
-        }
-      ]
-    },
     {
       "name": "NewTokenEvent",
       "fields": [
@@ -895,12 +1001,17 @@ export const IDL: Curve = {
       "type": {
         "defined": "usize"
       },
-      "value": "32"
+      "value": "30"
     },
     {
       "name": "TOTAL_SUPPLY",
       "type": "u64",
       "value": "1_000_000_000_000_000_000_u64"
+    },
+    {
+      "name": "TOTAL_SALE",
+      "type": "u64",
+      "value": "670_000_000_000_000_000_u64"
     }
   ],
   "instructions": [
@@ -959,7 +1070,7 @@ export const IDL: Curve = {
           "type": {
             "array": [
               "u64",
-              32
+              30
             ]
           }
         },
@@ -968,9 +1079,97 @@ export const IDL: Curve = {
           "type": {
             "array": [
               "u64",
-              32
+              30
             ]
           }
+        }
+      ]
+    },
+    {
+      "name": "setFeeWallet",
+      "accounts": [
+        {
+          "name": "configAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "feeWallet",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "feeWallet2",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "feeWallet3",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "setMinFee",
+      "accounts": [
+        {
+          "name": "configAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "minFee",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "setSystemFee",
+      "accounts": [
+        {
+          "name": "configAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "systemFee",
+          "type": "u64"
         }
       ]
     },
@@ -1321,7 +1520,17 @@ export const IDL: Curve = {
           "isSigner": false
         },
         {
+          "name": "authorityReserveTokenAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
           "name": "vaultTokenAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "vaultReserveTokenAccount",
           "isMut": true,
           "isSigner": false
         },
@@ -1333,6 +1542,11 @@ export const IDL: Curve = {
         {
           "name": "configAccount",
           "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "reserveToken",
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -1357,6 +1571,11 @@ export const IDL: Curve = {
         },
         {
           "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "reserveTokenProgram",
           "isMut": false,
           "isSigner": false
         },
@@ -1429,6 +1648,14 @@ export const IDL: Curve = {
             "type": "publicKey"
           },
           {
+            "name": "minFee",
+            "type": "u64"
+          },
+          {
+            "name": "accFee",
+            "type": "u64"
+          },
+          {
             "name": "systemFee",
             "type": "u64"
           },
@@ -1437,7 +1664,7 @@ export const IDL: Curve = {
             "type": {
               "array": [
                 "u64",
-                32
+                30
               ]
             }
           },
@@ -1446,7 +1673,7 @@ export const IDL: Curve = {
             "type": {
               "array": [
                 "u64",
-                32
+                30
               ]
             }
           },
@@ -1459,21 +1686,6 @@ export const IDL: Curve = {
     }
   ],
   "events": [
-    {
-      "name": "InitializedEvent",
-      "fields": [
-        {
-          "name": "authority",
-          "type": "publicKey",
-          "index": false
-        },
-        {
-          "name": "feeWallet",
-          "type": "publicKey",
-          "index": false
-        }
-      ]
-    },
     {
       "name": "NewTokenEvent",
       "fields": [

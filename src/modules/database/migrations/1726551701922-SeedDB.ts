@@ -18,8 +18,7 @@ export class SeedDB1726551701922 implements MigrationInterface {
                 isRunning: false,
                 runAt: Date.now(),
                 stop: false,
-                startSignature:
-                    CONTRACTS[CHAIN_ID.SOLANA_DEVNET].PUMP.deployedSignature,
+                startSignature: process.env.CURVE_DEPLOYER_SIGNATURE ?? '',
             },
         });
     }
