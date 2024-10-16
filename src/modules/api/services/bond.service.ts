@@ -144,7 +144,7 @@ export class BondService {
         const tokenEntity = await this.tokenRepo.findOne({
             where: { token },
         });
-        if (!tokenEntity) throw new Error('No Token');
+        if (!tokenEntity) return;
 
         const buyEvent = new TradeEntity();
         buyEvent.signature = signature;
@@ -218,7 +218,7 @@ export class BondService {
         const tokenEntity = await this.tokenRepo.findOne({
             where: { token },
         });
-        if (!tokenEntity) throw new Error('No Token');
+        if (!tokenEntity) return;
 
         const sellEvent = new TradeEntity();
         sellEvent.signature = signature;
