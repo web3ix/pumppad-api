@@ -63,7 +63,7 @@ export class ScheduleService {
             let payload: any = {
                 limit: 1000,
             };
-            if (!currentFromSignature) {
+            if (currentFromSignature) {
                 payload = {
                     ...payload,
                     until: currentFromSignature,
