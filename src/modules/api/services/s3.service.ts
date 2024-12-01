@@ -31,14 +31,9 @@ export class S3Service {
     private bucketEndpoint = this.configService.get('S3_BUCKET_ENDPOINT');
 
     constructor(private readonly configService: ConfigService) {
-        const s3_region = this.configService.get('S3_REGION');
-
-        if (!s3_region) {
-            throw new Error('S3_REGION not found in environment variables');
-        }
-
         this.client = new S3Client({
-            region: s3_region,
+            endpoint: this.configService.get('S3_ENDPOINT'),
+            region: this.configService.get('S3_REGION'),
             credentials: {
                 accessKeyId: this.configService.get('S3_ACCESS_KEY'),
                 secretAccessKey: this.configService.get('S3_SECRET_ACCESS_KEY'),
