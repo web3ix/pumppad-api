@@ -40,6 +40,7 @@ export const dbConfig = {
     username: configService.get('DB_USERNAME'),
     password: configService.get('DB_PASSWORD'),
     database: configService.get('DB_DATABASE'),
+    ssl: configService.get('DB_SSL') === 'true' ? true : false,
 };
 
 export const dataSourceOptions: DataSourceOptions = {
@@ -52,7 +53,7 @@ export const dataSourceOptions: DataSourceOptions = {
     entities: [...entities],
     migrations: [...migrations],
     logging: false,
-    ssl: false,
+    ssl: dbConfig.ssl,
     // TODO add db ssl in prod
     // ssl:
     //     process.env.APP_ENV == 'production'

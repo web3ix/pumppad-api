@@ -28,6 +28,7 @@ const PRECISION = BigNumber.from('1000000000000000000');
 export class S3Service {
     private client: S3Client;
     private bucketName = this.configService.get('S3_BUCKET_NAME');
+    private bucketEndpoint = this.configService.get('S3_BUCKET_ENDPOINT');
 
     constructor(private readonly configService: ConfigService) {
         const s3_region = this.configService.get('S3_REGION');
@@ -128,7 +129,7 @@ export class S3Service {
     }
 
     async getFileUrl(key: string) {
-        return { url: `https://${this.bucketName}.s3.amazonaws.com/${key}` };
+        return { url: `${this.bucketEndpoint}/${key}` };
     }
 
     async getPresignedSignedUrl(key: string) {

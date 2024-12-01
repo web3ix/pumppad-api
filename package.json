@@ -31,6 +31,7 @@
         "@aws-sdk/client-s3": "^3.645.0",
         "@aws-sdk/s3-request-presigner": "^3.645.0",
         "@coral-xyz/anchor": "^0.29.0",
+        "@ethersproject/abi": "^5.7.0",
         "@metamask/eth-sig-util": "^7.0.1",
         "@nestjs/bull": "^10.1.1",
         "@nestjs/common": "^10.4.1",
@@ -54,6 +55,7 @@
         "class-transformer": "^0.5.1",
         "class-validator": "^0.14.1",
         "decimal.js": "^10.4.3",
+        "dotenv": "^16.4.5",
         "ethers": "5.7.1",
         "ioredis": "^5.3.2",
         "lodash": "^4.17.21",
@@ -61,8 +63,10 @@
         "pg": "^8.11.0",
         "reflect-metadata": "^0.1.13",
         "rxjs": "^7.8.1",
+        "socket.io": "^4.8.1",
         "tweetnacl": "^1.0.3",
-        "typeorm": "^0.3.17"
+        "typeorm": "^0.3.17",
+        "uuid": "^11.0.3"
     },
     "devDependencies": {
         "@nestjs/cli": "^10.0.0",
